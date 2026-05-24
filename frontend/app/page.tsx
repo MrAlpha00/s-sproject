@@ -4,6 +4,9 @@ import TrustedBy from "@/components/TrustedBy";
 import FeaturesGrid from "@/components/FeaturesGrid";
 import UseCases from "@/components/UseCases";
 import Pricing from "@/components/Pricing";
+import CTABanner from "@/components/CTABanner";
+import Footer from "@/components/Footer";
+import TranslationShowcase from "@/components/TranslationShowcase";
 
 
 export default function Home() {
@@ -13,8 +16,11 @@ export default function Home() {
       <Hero />
       <TrustedBy />
       <FeaturesGrid />
+      <TranslationShowcase />
       <UseCases />
       <Pricing />
+      <CTABanner />
+      <Footer />
 
       <div className="flex items-center justify-center h-[80vh]">
         <h1 className="text-4xl font-bold">
