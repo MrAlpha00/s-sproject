@@ -3,6 +3,7 @@ import Hero from "@/components/Hero";
 import TrustedBy from "@/components/TrustedBy";
 import FeaturesGrid from "@/components/FeaturesGrid";
 import UseCases from "@/components/UseCases";
+import Pricing from "@/components/Pricing";
 
 
 export default function Home() {
@@ -13,6 +14,7 @@ export default function Home() {
       <TrustedBy />
       <FeaturesGrid />
       <UseCases />
+      <Pricing />
 
       <div className="flex items-center justify-center h-[80vh]">
         <h1 className="text-4xl font-bold">
