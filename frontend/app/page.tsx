@@ -1,8 +1,9 @@
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import TrustedBy from "@/components/TrustedBy";
-import Features from "@/components/FeaturesGrid";
 import FeaturesGrid from "@/components/FeaturesGrid";
+import UseCases from "@/components/UseCases";
+
 
 export default function Home() {
   return (
@@ -11,6 +12,7 @@ export default function Home() {
       <Hero />
       <TrustedBy />
       <FeaturesGrid />
+      <UseCases />
 
       <div className="flex items-center justify-center h-[80vh]">
         <h1 className="text-4xl font-bold">
