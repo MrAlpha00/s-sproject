@@ -1,10 +1,10 @@
 import React from "react";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
-import TrustedBy from "@/components/TrustedBy";
+//import TrustedBy from "@/components/TrustedBy";
 import FeaturesGrid from "@/components/FeaturesGrid";
-import TranslationShowcase from "@/components/TranslationShowcase";
-import VoiceCloning from "@/components/VoiceCloning";
+//import TranslationShowcase from "@/components/TranslationShowcase";
+//import VoiceCloning from "@/components/VoiceCloning";
 import UseCases from "@/components/UseCases";
 import Pricing from "@/components/Pricing";
 import CTABanner from "@/components/CTABanner";
@@ -15,7 +15,7 @@ export default function Home() {
     <div className="relative min-h-screen bg-black text-foreground flex flex-col overflow-x-hidden antialiased">
       {/* Dynamic Background Noise/Overlay texture */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_20%,#000000_90%)] pointer-events-none -z-10" />
-      
+
       {/* Fixed Sticky Header */}
       <Navbar />
 
