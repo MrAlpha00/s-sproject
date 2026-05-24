@@ -3,9 +3,12 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ArrowRight, Languages } from "lucide-react";
+import Link from "next/link";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "./ui/button";
 
 export default function Navbar() {
+  const { user, isLoading } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -35,8 +38,7 @@ export default function Navbar() {
         }`}
       >
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-          {/* Logo */}
-          <a href="#" className="flex items-center gap-2 group">
+          <Link href="/" className="flex items-center gap-2 group">
             <div className="relative flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-electric-blue to-accent-purple p-[1px] shadow-[0_0_15px_rgba(0,212,255,0.2)]">
               <div className="w-full h-full bg-black rounded-lg flex items-center justify-center">
                 <Languages className="w-4 h-4 text-electric-blue group-hover:rotate-12 transition-transform duration-300" />
@@ -49,9 +51,8 @@ export default function Navbar() {
                 VOX
               </span>
             </span>
-          </a>
+          </Link>
 
-          {/* Desktop Nav Links */}
           <nav className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
               <a
@@ -65,14 +66,22 @@ export default function Navbar() {
             ))}
           </nav>
 
-          {/* CTA & Actions */}
           <div className="hidden md:flex items-center gap-4">
-            <a
-              href="#pricing"
-              className="text-sm font-medium text-zinc-300 hover:text-white transition-colors"
-            >
-              Sign In
-            </a>
+            {isLoading ? null : user ? (
+              <Link
+                href="/dashboard"
+                className="text-sm font-medium text-zinc-300 hover:text-white transition-colors"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="text-sm font-medium text-zinc-300 hover:text-white transition-colors"
+              >
+                Sign In
+              </Link>
+            )}
             <Button
               asChild
               className="relative overflow-hidden bg-white text-black font-semibold rounded-lg hover:bg-zinc-200 transition-all duration-300 px-5 group"
@@ -84,7 +93,6 @@ export default function Navbar() {
             </Button>
           </div>
 
-          {/* Mobile Menu Trigger */}
           <button
             onClick={() => setIsOpen(!isOpen)}
             className="md:hidden p-2 text-zinc-400 hover:text-white focus:outline-none"
@@ -95,7 +103,6 @@ export default function Navbar() {
         </div>
       </header>
 
-      {/* Mobile Navigation Drawer */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -117,13 +124,23 @@ export default function Navbar() {
                 </a>
               ))}
               <div className="flex flex-col gap-4 mt-6">
-                <a
-                  href="#pricing"
-                  onClick={() => setIsOpen(false)}
-                  className="text-base font-medium text-zinc-400 hover:text-white py-2"
-                >
-                  Sign In
-                </a>
+                {isLoading ? null : user ? (
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setIsOpen(false)}
+                    className="text-base font-medium text-electric-blue hover:text-white py-2"
+                  >
+                    Dashboard
+                  </Link>
+                ) : (
+                  <Link
+                    href="/login"
+                    onClick={() => setIsOpen(false)}
+                    className="text-base font-medium text-zinc-400 hover:text-white py-2"
+                  >
+                    Sign In
+                  </Link>
+                )}
                 <Button
                   asChild
                   onClick={() => setIsOpen(false)}
