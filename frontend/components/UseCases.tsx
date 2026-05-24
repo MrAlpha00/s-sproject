@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Presentation, Calendar, Video, Laptop, Gamepad } from "lucide-react";
 
@@ -101,11 +101,16 @@ export default function UseCases() {
 
   const [activeTab, setActiveTab] = useState(useCases[0]);
 
+  const barHeights = useMemo(
+    () => Array.from({ length: 18 }, (_, i) => `${Math.max(8, Math.round(25 + Math.sin(i * 0.8 + 0.5) * 55))}%`),
+    []
+  );
+
   return (
     <section id="usecases" className="relative py-28 px-6 bg-black/45 border-t border-b border-white/[0.04] overflow-hidden">
       {/* Soft ambient background glows */}
-      <div className="absolute top-[35%] left-[5%] w-[400px] h-[400px] bg-electric-blue/5 rounded-full blur-[140px] pointer-events-none -z-10" />
-      <div className="absolute bottom-[35%] right-[5%] w-[400px] h-[400px] bg-accent-purple/5 rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="absolute top-[35%] left-[5%] w-[300px] h-[300px] bg-electric-blue/5 rounded-full blur-[80px] pointer-events-none -z-10" />
+      <div className="absolute bottom-[35%] right-[5%] w-[300px] h-[300px] bg-accent-purple/5 rounded-full blur-[80px] pointer-events-none -z-10" />
 
       <div className="max-w-7xl mx-auto">
         
@@ -203,11 +208,11 @@ export default function UseCases() {
 
                   {/* Visual simulated monitor graph */}
                   <div className="h-10 bg-zinc-950/60 rounded-lg border border-white/[0.03] p-2 flex items-end justify-between gap-1 overflow-hidden">
-                    {Array.from({ length: 18 }).map((_, i) => (
+                    {barHeights.map((height, i) => (
                       <span
                         key={i}
                         className={`flex-1 rounded-t-sm min-h-[4px] bg-gradient-to-t ${activeTab.accentColor}`}
-                        style={{ height: `${20 + Math.sin(i * 0.8) * 60}%` }}
+                        style={{ height }}
                       />
                     ))}
                   </div>

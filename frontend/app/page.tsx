@@ -22,12 +22,6 @@ export default function Home() {
       <Pricing />
       <CTABanner />
       <Footer />
-
-      <div className="flex items-center justify-center h-[80vh]">
-        <h1 className="text-4xl font-bold">
-          Navbar Test
-        </h1>
-      </div>
     </main>
   );
 }

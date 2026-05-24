@@ -86,8 +86,8 @@ export default function VoiceCloning() {
   return (
     <section id="voicelab" className="relative py-28 px-6 overflow-hidden">
       {/* Background Neon glows */}
-      <div className="absolute top-[45%] right-0 w-[400px] h-[400px] bg-electric-blue/5 rounded-full blur-[140px] pointer-events-none -z-10" />
-      <div className="absolute bottom-[20%] left-0 w-[400px] h-[400px] bg-accent-purple/5 rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="absolute top-[45%] right-0 w-[400px] h-[400px] bg-electric-blue/5 rounded-full blur-[80px] pointer-events-none -z-10" />
+      <div className="absolute bottom-[20%] left-0 w-[400px] h-[400px] bg-accent-purple/5 rounded-full blur-[80px] pointer-events-none -z-10" />
 
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
@@ -208,18 +208,14 @@ export default function VoiceCloning() {
                       className="flex flex-col items-center justify-center z-10 w-full px-8"
                     >
                       <div className="flex gap-1.5 items-center justify-center mb-4 h-16 w-full max-w-sm">
-                        {Array.from({ length: 24 }).map((_, i) => (
-                          <motion.span
+                        {Array.from({ length: 12 }).map((_, i) => (
+                          <span
                             key={i}
-                            animate={{
-                              height: ["20%", "90%", "20%"],
-                            }}
-                            transition={{
-                              duration: 0.8 + (i % 4) * 0.2,
-                              repeat: Infinity,
-                              ease: "easeInOut",
-                            }}
                             className="flex-1 bg-gradient-to-t from-electric-blue to-accent-purple rounded-full min-h-[4px]"
+                            style={{
+                              animation: `vc-wave ${0.8 + (i % 4) * 0.2}s ease-in-out infinite`,
+                              animationDelay: `${i * 0.12}s`,
+                            }}
                           />
                         ))}
                       </div>
@@ -295,6 +291,13 @@ export default function VoiceCloning() {
 
         </div>
       </div>
+      <style>{`
+        @keyframes vc-wave {
+          0%, 100% { height: 20%; }
+          50% { height: 90%; }
+        }
+      `}</style>
     </section>
   );
 }
+

@@ -16,8 +16,8 @@ export default function Hero() {
       <div className="absolute inset-0 grid-bg opacity-[0.15] pointer-events-none -z-10" />
 
       {/* Floating Glowing Spheres */}
-      <div className="absolute top-[25%] left-[10%] w-[350px] h-[350px] bg-electric-blue/10 rounded-full blur-[120px] animate-pulse-slow pointer-events-none -z-10" />
-      <div className="absolute bottom-[20%] right-[10%] w-[400px] h-[400px] bg-accent-purple/10 rounded-full blur-[140px] animate-pulse-slow pointer-events-none -z-10" />
+      <div className="absolute top-[25%] left-[10%] w-[300px] h-[300px] bg-electric-blue/10 rounded-full blur-[80px] animate-pulse-slow pointer-events-none -z-10" />
+      <div className="absolute bottom-[20%] right-[10%] w-[300px] h-[300px] bg-accent-purple/10 rounded-full blur-[80px] animate-pulse-slow pointer-events-none -z-10" />
 
       <div className="max-w-5xl mx-auto text-center flex flex-col items-center z-10">
         {/* Animated Pill Badge */}
@@ -139,17 +139,15 @@ export default function Hero() {
 
                 {/* Waveform Generator Mockup */}
                 <div className="h-16 flex items-end justify-between gap-[3px] py-1">
-                  {[30, 60, 45, 90, 75, 40, 60, 85, 100, 70, 50, 80, 95, 60, 45, 80, 55, 30, 45, 75, 90, 60].map((height, i) => (
-                    <motion.span
+                  {[30, 60, 45, 90, 75, 40, 60, 85, 100, 70, 50, 80, 95, 60, 45, 80].map((height, i) => (
+                    <span
                       key={i}
-                      initial={{ height: "10%" }}
-                      animate={{ height: [`${height * 0.4}%`, `${height}%`, `${height * 0.4}%`] }}
-                      transition={{
-                        duration: 1.5 + (i % 3) * 0.3,
-                        repeat: Infinity,
-                        ease: "easeInOut",
-                      }}
                       className="flex-1 bg-gradient-to-t from-electric-blue/30 to-electric-blue rounded-full min-h-[4px]"
+                      style={{
+                        height: `${height * 0.6}%`,
+                        animation: `hero-wave ${1.5 + (i % 3) * 0.3}s ease-in-out infinite`,
+                        animationDelay: `${i * 0.08}s`,
+                      }}
                     />
                   ))}
                 </div>
@@ -191,6 +189,12 @@ export default function Hero() {
           </div>
         </motion.div>
       </div>
+      <style>{`
+        @keyframes hero-wave {
+          0%, 100% { height: 30%; }
+          50% { height: 100%; }
+        }
+      `}</style>
     </section>
   );
 }

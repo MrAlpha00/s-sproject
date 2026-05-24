@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, Pause, RefreshCw, Layers, Sparkles, Languages, Volume2 } from "lucide-react";
 import { Button } from "./ui/button";
@@ -147,11 +147,16 @@ export default function TranslationShowcase() {
     };
   }, []);
 
+  const waveformHeights = useMemo(
+    () => Array.from({ length: 48 }, (_, i) => `${15 + Math.sin(i * 0.5 + Math.PI * 0.25) * 80}%`),
+    []
+  );
+
   return (
     <section id="showcase" className="relative py-28 px-6 bg-black/35 border-t border-b border-white/[0.04] overflow-hidden">
       {/* Background decoration */}
-      <div className="absolute top-[35%] left-[5%] w-[450px] h-[450px] bg-electric-blue/5 rounded-full blur-[150px] pointer-events-none -z-10" />
-      <div className="absolute bottom-[35%] right-[5%] w-[450px] h-[450px] bg-accent-purple/5 rounded-full blur-[150px] pointer-events-none -z-10" />
+      <div className="absolute top-[35%] left-[5%] w-[350px] h-[350px] bg-electric-blue/5 rounded-full blur-[80px] pointer-events-none -z-10" />
+      <div className="absolute bottom-[35%] right-[5%] w-[350px] h-[350px] bg-accent-purple/5 rounded-full blur-[80px] pointer-events-none -z-10" />
 
       <div className="max-w-7xl mx-auto">
         
@@ -294,14 +299,12 @@ export default function TranslationShowcase() {
 
               {/* Reactive Waveform when playing */}
               <div className="h-5 flex items-center gap-[2px] justify-start opacity-70">
-                {Array.from({ length: 48 }).map((_, i) => (
+                {waveformHeights.map((height, i) => (
                   <span
                     key={i}
-                    className="w-[3px] bg-zinc-800 rounded-full transition-all duration-300"
+                    className="w-[3px] rounded-full transition-all duration-300"
                     style={{
-                      height: isPlaying
-                        ? `${15 + Math.sin(i * 0.5 + Date.now() * 0.05) * 80}%`
-                        : "15%",
+                      height: isPlaying ? height : "15%",
                       backgroundColor: isPlaying ? "var(--electric-blue)" : "var(--border)",
                     }}
                   />

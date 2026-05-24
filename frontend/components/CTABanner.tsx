@@ -19,7 +19,7 @@ export default function CTABanner() {
   return (
     <section id="cta" className="relative py-24 px-6 overflow-hidden">
       {/* Background decorations */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-r from-electric-blue/10 to-accent-purple/10 rounded-full blur-[100px] pointer-events-none -z-10" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-gradient-to-r from-electric-blue/10 to-accent-purple/10 rounded-full blur-[60px] pointer-events-none -z-10" />
       <div className="absolute inset-0 grid-bg opacity-[0.04] pointer-events-none -z-10" />
 
       <div className="max-w-5xl mx-auto">

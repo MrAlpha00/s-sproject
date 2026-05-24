@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Zap,
@@ -18,13 +18,12 @@ export default function FeaturesGrid() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      // Simulating a tiny real-time variance in low-latency processing
       setLatency(Number((1.2 + Math.random() * 0.45).toFixed(2)));
-    }, 2000);
+    }, 5000);
     return () => clearInterval(timer);
   }, []);
 
-  const languages = [
+  const languages = useMemo(() => [
     "Spanish",
     "Japanese",
     "German",
@@ -36,7 +35,7 @@ export default function FeaturesGrid() {
     "Arabic",
     "Portuguese",
     "Turkish",
-  ];
+  ], []);
 
   return (
     <section id="features" className="relative py-28 px-6 overflow-hidden">

@@ -71,8 +71,8 @@ export default function Pricing() {
   return (
     <section id="pricing" className="relative py-28 px-6 overflow-hidden">
       {/* Background decorations */}
-      <div className="absolute top-[25%] left-[10%] w-[350px] h-[350px] bg-electric-blue/5 rounded-full blur-[120px] pointer-events-none -z-10" />
-      <div className="absolute bottom-[20%] right-[10%] w-[400px] h-[400px] bg-accent-purple/5 rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="absolute top-[25%] left-[10%] w-[300px] h-[300px] bg-electric-blue/5 rounded-full blur-[80px] pointer-events-none -z-10" />
+      <div className="absolute bottom-[20%] right-[10%] w-[300px] h-[300px] bg-accent-purple/5 rounded-full blur-[80px] pointer-events-none -z-10" />
 
       <div className="max-w-7xl mx-auto">
         
