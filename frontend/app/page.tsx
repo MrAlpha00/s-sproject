@@ -7,7 +7,7 @@ import Pricing from "@/components/Pricing";
 import CTABanner from "@/components/CTABanner";
 import Footer from "@/components/Footer";
 import TranslationShowcase from "@/components/TranslationShowcase";
-
+import VoiceCloning from "@/components/VoiceCloning";
 
 export default function Home() {
   return (
@@ -17,6 +17,7 @@ export default function Home() {
       <TrustedBy />
       <FeaturesGrid />
       <TranslationShowcase />
+      <VoiceCloning />
       <UseCases />
       <Pricing />
       <CTABanner />
