@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import DashboardLayoutComponent from "@/components/dashboard/DashboardLayout";
+import { EventProvider } from "@/providers/EventProvider";
 
 export const metadata: Metadata = {
   title: "Dashboard | AetherVOX",
@@ -11,6 +12,10 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <DashboardLayoutComponent>{children}</DashboardLayoutComponent>;
+  return (
+    <EventProvider>
+      <DashboardLayoutComponent>{children}</DashboardLayoutComponent>
+    </EventProvider>
+  );
 }
 
