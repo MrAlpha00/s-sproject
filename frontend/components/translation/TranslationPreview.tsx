@@ -1,17 +1,10 @@
 "use client";
 
-import { MessageSquare, Sparkles, Trash2, Download } from "lucide-react";
-
-export interface TranscriptItem {
-  id: string;
-  speaker: string;
-  text: string;
-  confidence?: number; // 0 to 100
-  lang: string;
-}
+import { MessageSquare, Sparkles, Trash2, Download, Check, AlertCircle, RefreshCw } from "lucide-react";
+import { TranslationMessage } from "@/types/translation";
 
 interface TranslationPreviewProps {
-  transcripts: TranscriptItem[];
+  transcripts: TranslationMessage[];
   interimText: string;
   recognitionState: string;
   onClearTranscripts: () => void;
@@ -32,12 +25,25 @@ export function TranslationPreview({
     return "text-red-400 border-red-500/20 bg-red-500/5";
   };
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "Completed":
+        return <Check className="h-3 w-3 text-emerald-400 shrink-0" />;
+      case "Translating":
+      case "Pending":
+        return <RefreshCw className="h-3 w-3 text-amber-400 animate-spin shrink-0" />;
+      case "Failed":
+      default:
+        return <AlertCircle className="h-3 w-3 text-red-400 shrink-0" />;
+    }
+  };
+
   return (
     <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-5 flex flex-col h-[400px]">
       {/* Header Panel */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-4">
+      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-4 shrink-0">
         <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-          Live Translation Preview
+          Live Translation Studio Feed
         </h3>
         
         <div className="flex items-center gap-3">
@@ -48,7 +54,7 @@ export function TranslationPreview({
               <button
                 type="button"
                 onClick={onExportTranscripts}
-                className="p-1 rounded bg-zinc-800 border border-white/[0.06] hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                className="p-1.5 rounded bg-zinc-800 border border-white/[0.06] hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors"
                 title="Export transcript as TXT"
               >
                 <Download className="h-3 w-3" />
@@ -58,7 +64,7 @@ export function TranslationPreview({
               <button
                 type="button"
                 onClick={onClearTranscripts}
-                className="p-1 rounded bg-zinc-850 border border-red-500/10 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 transition-colors"
+                className="p-1.5 rounded bg-zinc-850 border border-red-500/10 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 transition-colors"
                 title="Clear transcript feed"
               >
                 <Trash2 className="h-3 w-3" />
@@ -68,7 +74,7 @@ export function TranslationPreview({
 
           {/* Connection Status Indicator */}
           <div className="flex items-center gap-1.5">
-            <span className={`flex h-1.5 w-1.5 rounded-full ${recognitionState === "Listening" ? "bg-emerald-500 animate-pulse" : "bg-zinc-600"}`} />
+            <span className={`flex h-1.5 w-1.5 rounded-full ${recognitionState === "Listening" ? "bg-emerald-500 animate-pulse" : "bg-zinc-650"}`} />
             <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
               {recognitionState}
             </span>
@@ -77,43 +83,102 @@ export function TranslationPreview({
       </div>
 
       {/* Scrolling transcripts window */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar flex flex-col justify-end">
+      <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
         {transcripts.length === 0 && !interimText && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center text-zinc-500 text-xs gap-2 py-10">
+          <div className="h-full flex flex-col items-center justify-center text-center text-zinc-500 text-xs gap-2 py-12">
             <MessageSquare className="h-6 w-6 text-zinc-700" />
-            <p>No audio captured yet.</p>
-            <p className="text-[10px] text-zinc-600 max-w-[250px]">
-              Ensure your audio device is connected, and toggle "Start Session" to open hardware capture channels.
+            <p>No translation streams active.</p>
+            <p className="text-[10px] text-zinc-650 max-w-[280px]">
+              Toggle 'Start Listening' or 'Start Translation' to stream microphone data into Azure.
             </p>
           </div>
         )}
 
-        {/* Finalized transcript blocks */}
-        <div className="space-y-4 overflow-y-auto max-h-[300px] pr-1">
+        {/* Finalized transcript blocks with translations */}
+        <div className="space-y-4">
           {transcripts.map((block) => (
-            <div key={block.id} className="flex gap-2.5 items-start bg-zinc-950/20 border border-white/[0.02] rounded-lg p-3">
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-electric-blue/10 border border-electric-blue/20 text-electric-blue mt-0.5">
-                <MessageSquare className="h-3.5 w-3.5" />
-              </div>
+            <div key={block.id} className="bg-zinc-950/30 border border-white/[0.03] rounded-xl p-4 space-y-3.5 shadow-sm">
               
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold text-white uppercase tracking-wider">{block.speaker}</span>
-                    <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">({block.lang})</span>
-                  </div>
-
-                  {block.confidence !== undefined && (
-                    <div className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider ${getConfidenceColor(block.confidence)}`}>
-                      <Sparkles className="h-2 w-2" />
-                      <span>{block.confidence}% Conf</span>
-                    </div>
-                  )}
+              {/* Original sentence header & content */}
+              <div className="flex gap-2.5 items-start">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-electric-blue/10 border border-electric-blue/20 text-electric-blue mt-0.5">
+                  <MessageSquare className="h-3.5 w-3.5" />
                 </div>
-                <p className="text-xs text-zinc-200 mt-1 leading-relaxed">
-                  {block.text}
-                </p>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white">Presenter</span>
+                      <span className="rounded bg-zinc-900 border border-white/[0.06] px-1.5 py-0.5 text-zinc-400 font-semibold font-mono text-[9px]">
+                        {block.sourceLanguage}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-zinc-500 font-semibold font-mono text-[9px]">
+                      <span>{new Date(block.timestamp).toLocaleTimeString()}</span>
+                      <span>•</span>
+                      <span>Rec: {block.recognitionLatency}ms</span>
+                      {block.confidence !== undefined && (
+                        <>
+                          <span>•</span>
+                          <span className={`inline-flex items-center gap-0.5 rounded border px-1 ${getConfidenceColor(block.confidence)}`}>
+                            <Sparkles className="h-2 w-2" />
+                            {block.confidence}%
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-zinc-200 mt-1.5 leading-relaxed font-semibold">
+                    {block.originalText}
+                  </p>
+                </div>
               </div>
+
+              {/* Nested translation results */}
+              <div className="pl-8 border-l border-white/[0.04] space-y-3">
+                {block.targetLanguage.map((langCode) => {
+                  const translationText = block.translatedText[langCode];
+                  const hasTranslation = !!translationText;
+                  const isTranslating = block.status === "Translating" || block.status === "Pending";
+                  const isFailed = block.status === "Failed" && !hasTranslation;
+
+                  return (
+                    <div key={langCode} className="space-y-1">
+                      {/* Translation block header info */}
+                      <div className="flex items-center justify-between gap-4 text-[9px] font-bold uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5">
+                          <span className="rounded bg-zinc-900/60 border border-white/[0.04] px-1.5 py-0.2 text-zinc-400 font-mono">
+                            {langCode}
+                          </span>
+                          <span className="text-zinc-500">➔</span>
+                          <span className="rounded bg-electric-blue/5 border border-electric-blue/10 px-1 py-0.2 text-electric-blue text-[8px] font-extrabold">
+                            Azure
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-zinc-500 font-mono text-[8px]">
+                          <span>Trans: {block.translationLatency || "--"}ms</span>
+                          <span>•</span>
+                          {getStatusIcon(isFailed ? "Failed" : isTranslating ? "Translating" : "Completed")}
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <p className={`text-xs leading-relaxed mt-1 ${
+                        isFailed ? "text-red-400 italic" : isTranslating ? "text-zinc-500 italic" : "text-zinc-300"
+                      }`}>
+                        {isFailed 
+                          ? "Translation failed. Check connection." 
+                          : isTranslating 
+                            ? "Translating phrase..." 
+                            : translationText}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
             </div>
           ))}
 
@@ -126,7 +191,7 @@ export function TranslationPreview({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Live Input</span>
-                  <span className="text-[8px] text-zinc-650 font-bold uppercase">Recognizing...</span>
+                  <span className="text-[8px] text-zinc-655 font-bold uppercase">Recognizing...</span>
                 </div>
                 <p className="text-xs text-zinc-400 mt-1 leading-relaxed italic">
                   {interimText}

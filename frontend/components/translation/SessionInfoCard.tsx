@@ -15,6 +15,12 @@ interface SessionInfoCardProps {
   translationLatency: string;
   synthesisLatency: string;
   totalPipelineLatency: string;
+
+  // Module 10 additional fields
+  recognitionStatus: string;
+  translationStatus: string;
+  messagesProcessed: number;
+  provider: string;
 }
 
 export function SessionInfoCard({
@@ -29,6 +35,10 @@ export function SessionInfoCard({
   translationLatency,
   synthesisLatency,
   totalPipelineLatency,
+  recognitionStatus,
+  translationStatus,
+  messagesProcessed,
+  provider,
 }: SessionInfoCardProps) {
   const { events } = useEvents();
   const linkedEvent = events.find((e) => e.id === selectedEventId);
@@ -51,11 +61,47 @@ export function SessionInfoCard({
           </span>
         </div>
 
-        {/* Status */}
+        {/* Combined Status */}
         <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
-          <span className="text-zinc-500 font-medium">Status</span>
+          <span className="text-zinc-500 font-medium">Session Status</span>
           <span className="rounded bg-zinc-950 border border-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
             {status}
+          </span>
+        </div>
+
+        {/* Recognition Status */}
+        <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
+          <span className="text-zinc-500 font-medium">Recognition Status</span>
+          <span className={`font-semibold uppercase ${
+            recognitionStatus === "Listening" ? "text-emerald-400" : "text-zinc-400"
+          }`}>
+            {recognitionStatus}
+          </span>
+        </div>
+
+        {/* Translation Status */}
+        <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
+          <span className="text-zinc-500 font-medium">Translation Status</span>
+          <span className={`font-semibold uppercase ${
+            translationStatus === "Translating" ? "text-amber-400" : "text-zinc-400"
+          }`}>
+            {translationStatus}
+          </span>
+        </div>
+
+        {/* Messages Processed */}
+        <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
+          <span className="text-zinc-500 font-medium">Messages Processed</span>
+          <span className="text-zinc-300 font-bold font-mono">
+            {messagesProcessed}
+          </span>
+        </div>
+
+        {/* Provider */}
+        <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
+          <span className="text-zinc-500 font-medium">Active Provider</span>
+          <span className="text-zinc-300 font-semibold">
+            {provider}
           </span>
         </div>
 
@@ -63,7 +109,7 @@ export function SessionInfoCard({
         <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
           <span className="text-zinc-500 font-medium flex items-center gap-1">
             Audio Source
-            <Mic className="h-3 w-3 text-zinc-650" />
+            <Mic className="h-3 w-3 text-zinc-655" />
           </span>
           <span className="text-zinc-350 font-semibold truncate max-w-[150px] text-right">
             {currentMicrophone}
@@ -74,7 +120,7 @@ export function SessionInfoCard({
         <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
           <span className="text-zinc-500 font-medium flex items-center gap-1">
             Audio Destination
-            <Volume2 className="h-3 w-3 text-zinc-650" />
+            <Volume2 className="h-3 w-3 text-zinc-655" />
           </span>
           <span className="text-zinc-350 font-semibold truncate max-w-[150px] text-right">
             {currentSpeaker}
@@ -131,9 +177,9 @@ export function SessionInfoCard({
       </div>
 
       <div className="rounded-lg bg-zinc-950/40 border border-white/[0.03] p-3 text-[10px] text-zinc-500 leading-normal flex gap-1.5">
-        <Info className="h-4 w-4 text-zinc-600 shrink-0 mt-0.5" />
+        <Info className="h-4 w-4 text-zinc-655 shrink-0 mt-0.5" />
         <p>
-          Expected latencies are calibrated continuously based on active cloud routing endpoints.
+          Pipeline latencies represent active cloud network travel intervals.
         </p>
       </div>
     </div>

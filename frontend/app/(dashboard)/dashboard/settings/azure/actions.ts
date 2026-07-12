@@ -134,3 +134,56 @@ export async function getSpeechToken() {
   }
 }
 
+export async function translateTextAction(
+  text: string,
+  from: string,
+  to: string[]
+) {
+  const { translatorKey, translatorRegion, translatorEndpoint } = getAzureSecrets();
+
+  if (!translatorKey) {
+    return {
+      success: false,
+      message: "Azure Translator API key is not configured on the server environment.",
+    };
+  }
+
+  // Construct target languages string query
+  const targetParams = to.map((lang) => `to=${lang}`).join("&");
+  const url = `${translatorEndpoint}/translate?api-version=3.0&from=${from.split("-")[0]}&${targetParams}`;
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Ocp-Apim-Subscription-Key": translatorKey,
+        "Ocp-Apim-Subscription-Region": translatorRegion,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([{ Text: text }]),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Azure Translator API returned status ${res.status}: ${errText}`);
+    }
+
+    const data = await res.json();
+    const translations = data[0]?.translations || [];
+    return {
+      success: true,
+      translations: translations.map((t: any) => ({
+        text: t.text,
+        to: t.to,
+      })),
+    };
+  } catch (err: any) {
+    console.error("Server-side translation error:", err);
+    return {
+      success: false,
+      message: err.message || "Failed to execute server-side translation.",
+    };
+  }
+}
+
+
