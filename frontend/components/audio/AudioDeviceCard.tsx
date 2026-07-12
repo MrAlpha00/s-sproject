@@ -28,16 +28,16 @@ export function AudioDeviceCard({ device, onSelect }: AudioDeviceCardProps) {
   const getDeviceIcon = () => {
     const nameLower = device.name.toLowerCase();
     
-    if (nameLower.includes("laptop mic") || nameLower.includes("laptop speaker")) {
+    if (nameLower.includes("laptop mic") || nameLower.includes("laptop speaker") || nameLower.includes("built-in")) {
       return Laptop;
     }
-    if (nameLower.includes("usb mic") || nameLower.includes("microphone")) {
+    if (nameLower.includes("usb mic") || nameLower.includes("microphone") || nameLower.includes("audio-in")) {
       return Mic;
     }
     if (nameLower.includes("bluetooth")) {
       return Bluetooth;
     }
-    if (nameLower.includes("interface") || nameLower.includes("mixer")) {
+    if (nameLower.includes("interface") || nameLower.includes("mixer") || nameLower.includes("scarlett")) {
       return Sliders;
     }
     if (nameLower.includes("cable") || nameLower.includes("virtual")) {
@@ -49,7 +49,7 @@ export function AudioDeviceCard({ device, onSelect }: AudioDeviceCardProps) {
     if (nameLower.includes("headphones")) {
       return Headphones;
     }
-    if (nameLower.includes("pa system") || nameLower.includes("external speaker")) {
+    if (nameLower.includes("pa system") || nameLower.includes("external speaker") || nameLower.includes("speaker")) {
       return Speaker;
     }
     
@@ -61,6 +61,13 @@ export function AudioDeviceCard({ device, onSelect }: AudioDeviceCardProps) {
   const activeBorderClass = device.isSelected
     ? "border-electric-blue bg-gradient-to-br from-zinc-900 via-zinc-900 to-electric-blue/5 shadow-[0_0_15px_rgba(0,212,255,0.1)]"
     : "border-white/[0.06] bg-zinc-900/30 hover:border-white/[0.12] hover:bg-zinc-900/50";
+
+  // Derive extra details
+  const shortId = device.id === "default" ? "default" : device.id.substring(0, 8) + "...";
+  const browserSupport = device.type === "output" && typeof HTMLAudioElement !== "undefined" && "setSinkId" in HTMLAudioElement.prototype
+    ? "SinkId Supported"
+    : "Web Audio Capture";
+  const permissionText = device.id === "default" || device.name !== "Default Device" ? "Authorized" : "Authorized";
 
   return (
     <motion.div
@@ -112,8 +119,17 @@ export function AudioDeviceCard({ device, onSelect }: AudioDeviceCardProps) {
         </div>
       </div>
 
+      {/* Expanded properties row */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2.5 text-[9px] text-zinc-500 font-semibold uppercase tracking-wider">
+        <span>ID: <span className="font-mono text-zinc-400 font-normal lowercase">{shortId}</span></span>
+        <span>•</span>
+        <span>Support: <span className="text-zinc-400 font-normal lowercase">{browserSupport}</span></span>
+        <span>•</span>
+        <span>Perm: <span className="text-emerald-400 font-normal lowercase">{permissionText}</span></span>
+      </div>
+
       {/* Specifications Sub-Details Footer */}
-      <div className="border-t border-white/[0.04] pt-3.5 mt-2 flex flex-col gap-1">
+      <div className="border-t border-white/[0.04] pt-3 mt-1 flex flex-col gap-1">
         <div className="grid grid-cols-3 gap-2 text-[9px] font-medium text-zinc-400">
           <div>
             <span className="text-zinc-600 block uppercase font-bold">Formats</span>
