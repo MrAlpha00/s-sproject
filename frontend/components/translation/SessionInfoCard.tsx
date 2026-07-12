@@ -16,11 +16,16 @@ interface SessionInfoCardProps {
   synthesisLatency: string;
   totalPipelineLatency: string;
 
-  // Module 10 additional fields
   recognitionStatus: string;
   translationStatus: string;
   messagesProcessed: number;
   provider: string;
+
+  // Module 11 dynamic voice parameters
+  speechEngine: string;
+  currentVoice: string;
+  voiceQueueCount: number;
+  messagesSpoken: number;
 }
 
 export function SessionInfoCard({
@@ -39,6 +44,10 @@ export function SessionInfoCard({
   translationStatus,
   messagesProcessed,
   provider,
+  speechEngine,
+  currentVoice,
+  voiceQueueCount,
+  messagesSpoken,
 }: SessionInfoCardProps) {
   const { events } = useEvents();
   const linkedEvent = events.find((e) => e.id === selectedEventId);
@@ -92,38 +101,54 @@ export function SessionInfoCard({
         {/* Messages Processed */}
         <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
           <span className="text-zinc-500 font-medium">Messages Processed</span>
-          <span className="text-zinc-300 font-bold font-mono">
+          <span className="text-zinc-350 font-bold font-mono">
             {messagesProcessed}
           </span>
         </div>
 
-        {/* Provider */}
+        {/* Messages Spoken (Module 11) */}
         <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
-          <span className="text-zinc-500 font-medium">Active Provider</span>
-          <span className="text-zinc-300 font-semibold">
-            {provider}
+          <span className="text-zinc-500 font-medium">Messages Spoken</span>
+          <span className="text-zinc-350 font-bold font-mono">
+            {messagesSpoken}
+          </span>
+        </div>
+
+        {/* Speech Engine */}
+        <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
+          <span className="text-zinc-500 font-medium">Speech Engine</span>
+          <span className="text-zinc-300 font-semibold truncate max-w-[150px] text-right">
+            {speechEngine}
+          </span>
+        </div>
+
+        {/* Current Voice */}
+        <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
+          <span className="text-zinc-500 font-medium">Active Voice</span>
+          <span className="text-zinc-300 font-semibold truncate max-w-[150px] text-right font-mono text-[10px]">
+            {currentVoice}
+          </span>
+        </div>
+
+        {/* Output Device */}
+        <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
+          <span className="text-zinc-500 font-medium flex items-center gap-1">
+            Output Device
+            <Volume2 className="h-3 w-3 text-zinc-655" />
+          </span>
+          <span className="text-zinc-350 font-semibold truncate max-w-[150px] text-right">
+            {currentSpeaker}
           </span>
         </div>
 
         {/* Microphone status */}
         <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
           <span className="text-zinc-500 font-medium flex items-center gap-1">
-            Audio Source
+            Input Device
             <Mic className="h-3 w-3 text-zinc-655" />
           </span>
           <span className="text-zinc-350 font-semibold truncate max-w-[150px] text-right">
             {currentMicrophone}
-          </span>
-        </div>
-
-        {/* Speaker status */}
-        <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
-          <span className="text-zinc-500 font-medium flex items-center gap-1">
-            Audio Destination
-            <Volume2 className="h-3 w-3 text-zinc-655" />
-          </span>
-          <span className="text-zinc-350 font-semibold truncate max-w-[150px] text-right">
-            {currentSpeaker}
           </span>
         </div>
 
@@ -138,14 +163,6 @@ export function SessionInfoCard({
           <span className="text-zinc-500 font-medium">Translation Langs</span>
           <span className="text-zinc-300 font-semibold truncate max-w-[150px] text-right uppercase">
             {translationLanguage}
-          </span>
-        </div>
-
-        {/* Voice profile */}
-        <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
-          <span className="text-zinc-500 font-medium">Voice Profile</span>
-          <span className="text-zinc-300 font-semibold truncate max-w-[150px] text-right">
-            {voiceProfile}
           </span>
         </div>
 
