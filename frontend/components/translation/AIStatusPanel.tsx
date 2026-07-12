@@ -1,29 +1,38 @@
 "use client";
 
-import { Activity, ShieldCheck, AlertCircle, Info, HardDrive } from "lucide-react";
+import { Activity, Info } from "lucide-react";
 
-interface StatusItemProps {
-  name: string;
-  status: "Pending" | "Not Connected" | "Connected";
-  region: string;
-  connection: string;
-  latency: string;
-  icon: string;
+interface AIStatusPanelProps {
+  speechStatus?: "Pending" | "Not Connected" | "Connected";
+  speechRegionName?: string;
+  speechConnection?: string;
+  speechLatency?: string;
+  audioStatus?: "Pending" | "Not Connected" | "Connected";
+  audioConnection?: string;
+  audioLatency?: string;
 }
 
-export function AIStatusPanel() {
-  const integrations: StatusItemProps[] = [
+export function AIStatusPanel({
+  speechStatus = "Pending",
+  speechRegionName = "US East (Virginia)",
+  speechConnection = "WebSocket Initiating",
+  speechLatency = "-- ms",
+  audioStatus = "Not Connected",
+  audioConnection = "No stream detected",
+  audioLatency = "-- ms",
+}: AIStatusPanelProps) {
+  const integrations = [
     {
       name: "Azure Speech Service",
-      status: "Pending",
-      region: "US East (Virginia)",
-      connection: "WebSocket Initiating",
-      latency: "-- ms",
+      status: speechStatus,
+      region: speechRegionName,
+      connection: speechConnection,
+      latency: speechLatency,
       icon: "speech",
     },
     {
       name: "Azure Neural Translator",
-      status: "Pending",
+      status: "Pending" as const,
       region: "Global (Multi-region)",
       connection: "Endpoint Standby",
       latency: "-- ms",
@@ -31,7 +40,7 @@ export function AIStatusPanel() {
     },
     {
       name: "ElevenLabs Synthesizer",
-      status: "Pending",
+      status: "Pending" as const,
       region: "Global (Edge)",
       connection: "Socket Initializing",
       latency: "-- ms",
@@ -39,10 +48,10 @@ export function AIStatusPanel() {
     },
     {
       name: "Audio Channels",
-      status: "Not Connected",
+      status: audioStatus,
       region: "Local hardware",
-      connection: "No stream detected",
-      latency: "-- ms",
+      connection: audioConnection,
+      latency: audioLatency,
       icon: "audio",
     },
   ];
@@ -121,7 +130,7 @@ export function AIStatusPanel() {
       <div className="rounded-lg bg-zinc-950/40 border border-white/[0.03] p-3 text-[10px] text-zinc-500 leading-normal flex gap-1.5">
         <Info className="h-4 w-4 text-zinc-600 shrink-0 mt-0.5" />
         <p>
-          Integrations show <span className="text-amber-400 font-semibold">Pending</span> until API credentials are wired. Connection indicators will transition to live status upon starting.
+          Integrations transition to <span className="text-emerald-400 font-semibold">Connected</span> status upon starting active capturing.
         </p>
       </div>
     </div>
