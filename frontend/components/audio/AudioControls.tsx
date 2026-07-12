@@ -37,7 +37,7 @@ export function AudioControls({
             Refresh Devices
           </button>
 
-          {/* Test Input */}
+          {/* Test Selected Device */}
           <button
             type="button"
             onClick={() => setIsTestingInput(!isTestingInput)}
@@ -48,7 +48,7 @@ export function AudioControls({
             }`}
           >
             {isTestingInput ? <Square className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
-            {isTestingInput ? "Stop Input Test" : "Test Input"}
+            {isTestingInput ? "Stop Device Test" : "Test Selected Device"}
           </button>
 
           {/* Test Output */}
