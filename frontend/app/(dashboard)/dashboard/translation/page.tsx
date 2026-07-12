@@ -5,12 +5,14 @@ import { useEvents } from "@/providers/EventProvider";
 import { TranslationHeader } from "@/components/translation/TranslationHeader";
 import { TranslationConfigPanel, PoolOption } from "@/components/translation/TranslationConfigPanel";
 import { SessionInfoCard } from "@/components/translation/SessionInfoCard";
-import { TranslationPreview } from "@/components/translation/TranslationPreview";
+import { TranslationPreview, SpeechStatusInfo } from "@/components/translation/TranslationPreview";
 import { SessionControls } from "@/components/translation/SessionControls";
 import { AIStatusPanel } from "@/components/translation/AIStatusPanel";
 import { getSpeechToken } from "@/app/(dashboard)/dashboard/settings/azure/actions";
 import { SpeechRecognitionService, SpeechState } from "@/lib/azure/services/SpeechRecognitionService";
 import { TranslationPipeline } from "@/lib/translation/TranslationPipeline";
+import { SpeechSynthesisService } from "@/lib/azure/services/SpeechSynthesisService";
+import { SynthesisQueue } from "@/lib/audio/SynthesisQueue";
 import { TranslationMessage } from "@/types/translation";
 import { AZURE_LANGUAGES } from "@/lib/azure/constants";
 import { createClient } from "@/supabase/client";
@@ -35,6 +37,13 @@ export default function TranslationStudioPage() {
     { value: "default", label: "Default System Audio Output" }
   ]);
 
+  // Providers & toggles
+  const [speechProvider, setSpeechProvider] = useState("azure");
+  const [translationProvider, setTranslationProvider] = useState("azure-translator");
+  const [outputVoiceEngine, setOutputVoiceEngine] = useState("elevenlabs");
+  const [captionsEnabled, setCaptionsEnabled] = useState(true);
+  const [recordingEnabled, setRecordingEnabled] = useState(false);
+
   // Selections
   const [selectedEventId, setSelectedEventId] = useState("manual");
   const [sourceLanguage, setSourceLanguage] = useState("en-US");
@@ -48,13 +57,6 @@ export default function TranslationStudioPage() {
   const [inputDevice, setInputDevice] = useState("default");
   const [outputDevice, setOutputDevice] = useState("default");
 
-  // Providers & toggles
-  const [speechProvider, setSpeechProvider] = useState("azure");
-  const [translationProvider, setTranslationProvider] = useState("azure-translator");
-  const [outputVoiceEngine, setOutputVoiceEngine] = useState("elevenlabs");
-  const [captionsEnabled, setCaptionsEnabled] = useState(true);
-  const [recordingEnabled, setRecordingEnabled] = useState(false);
-
   // Connection & session states
   const [isAzureConfigured, setIsAzureConfigured] = useState(false);
   const [azureToken, setAzureToken] = useState("");
@@ -63,15 +65,25 @@ export default function TranslationStudioPage() {
   // Real-time Pipeline States
   const [isListening, setIsListening] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
   const [transcripts, setTranscripts] = useState<TranslationMessage[]>([]);
   const [interimText, setInterimText] = useState("");
   const [recognitionState, setRecognitionState] = useState<SpeechState>("Idle");
+
+  // Speech status logs mapping
+  const [speechStatuses, setSpeechStatuses] = useState<Record<string, SpeechStatusInfo>>({});
 
   // Latency & Metrics tracking
   const [averageTranslationTime, setAverageTranslationTime] = useState("-- ms");
   const [translationErrors, setTranslationErrors] = useState(0);
   const [messagesProcessed, setMessagesProcessed] = useState(0);
   const [translationStatus, setTranslationStatus] = useState<"Pending" | "Translating" | "Completed" | "Failed">("Pending");
+
+  // Speech TTS metrics
+  const [averageSpeechLatency, setAverageSpeechLatency] = useState("-- ms");
+  const [voiceQueueCount, setVoiceQueueCount] = useState(0);
+  const [messagesSpoken, setMessagesSpoken] = useState(0);
+  const [currentVoice, setCurrentVoice] = useState("--");
 
   const [recognitionLatency, setRecognitionLatency] = useState("-- ms");
   const [translationLatency, setTranslationLatency] = useState("-- ms");
@@ -81,8 +93,30 @@ export default function TranslationStudioPage() {
   const [microphoneStatus, setMicrophoneStatus] = useState("Default System Mic");
   const [speakerStatus, setSpeakerStatus] = useState("Default System Speakers");
 
+  // Azure TTS voices lookup dictionary (auto matching fallbacks)
+  const [voicesList, setVoicesList] = useState<Record<string, string>>({
+    "en-US": "en-US-AvaMultilingualNeural",
+    "hi-IN": "hi-IN-MadhurNeural",
+    "te-IN": "te-IN-MohanNeural",
+    "kn-IN": "kn-IN-GaganNeural",
+    "ta-IN": "ta-IN-ValluvarNeural",
+    "ml-IN": "ml-IN-MidhunNeural",
+    "mr-IN": "mr-IN-ManoharNeural",
+    "gu-IN": "gu-IN-NiranjanNeural",
+    "pa-IN": "pa-IN-YashpalNeural",
+    "bn-IN": "bn-IN-BashkarNeural",
+    "ur-IN": "ur-IN-GulNeural",
+    "es-ES": "es-ES-AlvaroNeural",
+    "fr-FR": "fr-FR-HenriNeural",
+    "de-DE": "de-DE-ConradNeural",
+    "ja-JP": "ja-JP-KeitaNeural",
+    "ko-KR": "ko-KR-InJoonNeural",
+  });
+
   const speechServiceRef = useRef<SpeechRecognitionService | null>(null);
+  const speechSynthServiceRef = useRef<SpeechSynthesisService | null>(null);
   const pipelineRef = useRef<TranslationPipeline | null>(null);
+  const synthesisQueueRef = useRef<SynthesisQueue | null>(null);
 
   // Mount logic: initialize Pipeline, fetch Token, scan Devices, load Voices
   useEffect(() => {
@@ -117,12 +151,9 @@ export default function TranslationStudioPage() {
         setMessagesProcessed(metrics.messagesProcessed);
         setTranslationStatus(metrics.translationStatus);
 
-        // Update latency meters dynamically if there's a latency reading
         const activeMsg = pipeline.getQueue().find((m) => m.status === "Completed");
         if (activeMsg) {
           setTranslationLatency(`${activeMsg.translationLatency}ms`);
-          setSynthesisLatency("210ms"); // Mock TTS latency
-          setTotalPipelineLatency(`${activeMsg.recognitionLatency + activeMsg.translationLatency + 210}ms`);
         }
       },
     });
@@ -135,12 +166,86 @@ export default function TranslationStudioPage() {
           setIsAzureConfigured(true);
           setAzureToken(result.token);
           setAzureRegion(result.region);
+
+          // 3. Initialize Speech Synthesis Service and Queue client-side
+          const synthService = new SpeechSynthesisService(result.token, result.region);
+          speechSynthServiceRef.current = synthService;
+
+          const synthesisQueue = new SynthesisQueue(synthService);
+          synthesisQueueRef.current = synthesisQueue;
+
+          // Connect output route device sink ID from localStorage (Module 6 integration)
+          if (typeof window !== "undefined") {
+            const savedOutputId = localStorage.getItem("aethervox_active_output");
+            synthesisQueue.setDeviceId(savedOutputId);
+          }
+
+          synthesisQueue.registerCallbacks({
+            onMessageUpdate: (msg) => {
+              // Map speech synthesis state back to its translation row
+              setTranscripts((prev) => {
+                const matched = prev.find((t) => 
+                  Object.values(t.translatedText).includes(msg.text)
+                );
+                if (matched) {
+                  const langCode = Object.keys(matched.translatedText).find(
+                    (k) => matched.translatedText[k] === msg.text
+                  );
+                  if (langCode) {
+                    const stateKey = `${matched.id}-${langCode}`;
+                    setSpeechStatuses((prevStatuses) => ({
+                      ...prevStatuses,
+                      [stateKey]: {
+                        voice: msg.voice,
+                        status: msg.status,
+                        latency: msg.latency,
+                        duration: msg.duration,
+                      },
+                    }));
+                  }
+                }
+                return prev;
+              });
+            },
+            onMetricsUpdate: (metrics) => {
+              setAverageSpeechLatency(`${metrics.averageSynthesisLatency}ms`);
+              setVoiceQueueCount(metrics.queueSize);
+              setMessagesSpoken(metrics.spokenCount);
+              setCurrentVoice(metrics.activeVoice);
+              
+              if (metrics.averageSynthesisLatency > 0) {
+                setSynthesisLatency(`${metrics.averageSynthesisLatency}ms`);
+                // Calculate dynamic total pipeline latency
+                setTranscripts((prev) => {
+                  const active = prev.find((t) => t.status === "Completed");
+                  if (active) {
+                    setTotalPipelineLatency(`${active.recognitionLatency + active.translationLatency + metrics.averageSynthesisLatency}ms`);
+                  }
+                  return prev;
+                });
+              }
+            },
+          });
+
+          // 4. Preload Azure voice lists dynamically
+          const preloaded = await synthService.preloadVoices();
+          if (preloaded && preloaded.length > 0) {
+            setVoicesList((prevList) => {
+              const updated = { ...prevList };
+              preloaded.forEach((v) => {
+                if (v.locale) {
+                  updated[v.locale] = v.shortName || v.name;
+                }
+              });
+              return updated;
+            });
+          }
         }
       } catch (err) {
-        console.warn("Failed to load Azure token:", err);
+        console.warn("Failed to load Azure configuration tokens:", err);
       }
 
-      // 3. Scan browser inputs & destinations
+      // 5. Scan inputs & destinations
       try {
         if (typeof navigator !== "undefined" && navigator.mediaDevices) {
           const devices = await navigator.mediaDevices.enumerateDevices();
@@ -161,10 +266,10 @@ export default function TranslationStudioPage() {
           if (outputs.length > 0) setAudioOutputsPool(outputs);
         }
       } catch (err) {
-        console.warn("Hardware enumeration not allowed/supported:", err);
+        console.warn("Hardware enumeration failed/denied:", err);
       }
 
-      // 4. Load database voices
+      // 6. Load voices from db voice profiles list
       try {
         const supabase = createClient();
         const voiceRepo = new VoiceRepository(supabase);
@@ -180,10 +285,13 @@ export default function TranslationStudioPage() {
 
     loadData();
 
-    // Clean up streams on leave
+    // Clean up connections on leave
     return () => {
       if (speechServiceRef.current) {
         speechServiceRef.current.stop();
+      }
+      if (synthesisQueueRef.current) {
+        synthesisQueueRef.current.stopAll();
       }
     };
   }, []);
@@ -194,21 +302,48 @@ export default function TranslationStudioPage() {
     if (inputOpt) setMicrophoneStatus(inputOpt.label);
 
     const outputOpt = audioOutputsPool.find((o) => o.value === outputDevice);
-    if (outputOpt) setSpeakerStatus(outputOpt.label);
+    if (outputOpt) {
+      setSpeakerStatus(outputOpt.label);
+      if (synthesisQueueRef.current) {
+        synthesisQueueRef.current.setDeviceId(outputDevice === "default" ? null : outputDevice);
+      }
+    }
   }, [inputDevice, outputDevice, audioInputsPool, audioOutputsPool]);
+
+  // Hook pipeline completions to audio synthesis enqueuer
+  useEffect(() => {
+    if (pipelineRef.current) {
+      pipelineRef.current.registerOnComplete((msg) => {
+        if (isVoiceEnabled) {
+          msg.targetLanguage.forEach((langCode) => {
+            const text = msg.translatedText[langCode];
+            if (text) {
+              const voiceName = voicesList[langCode] || "en-US-AvaMultilingualNeural";
+              if (synthesisQueueRef.current) {
+                synthesisQueueRef.current.enqueue(text, langCode, voiceName);
+              }
+            }
+          });
+        }
+      });
+    }
+  }, [isVoiceEnabled, voicesList]);
 
   // Transcripts handlers
   const handleClearTranscripts = () => {
     setTranscripts([]);
+    setSpeechStatuses({});
     if (pipelineRef.current) {
       pipelineRef.current.clearQueue();
+    }
+    if (synthesisQueueRef.current) {
+      synthesisQueueRef.current.clearQueue();
     }
   };
 
   const handleExportTranscripts = () => {
     if (transcripts.length === 0) return;
     
-    // Create clean transcript output containing original + target translations
     const textContent = transcripts
       .map((t) => {
         let block = `Original: ${t.originalText}`;
@@ -223,7 +358,7 @@ export default function TranslationStudioPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `AetherVOX-translation-${Date.now()}.txt`;
+    link.download = `AetherVOX-synthesis-${Date.now()}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -264,7 +399,7 @@ export default function TranslationStudioPage() {
           const recLatency = Math.floor(Math.random() * 40) + 120; // 120-160ms
           setRecognitionLatency(`${recLatency}ms`);
 
-          // Automatically pipe final recognized sentence to Translation Pipeline
+          // Pipe final recognized sentence to Translation Pipeline
           if (pipelineRef.current && isTranslating) {
             pipelineRef.current.enqueue(
               result.text,
@@ -274,7 +409,6 @@ export default function TranslationStudioPage() {
               recLatency
             );
           } else {
-            // Push transcript block locally with no translations
             const newItem: TranslationMessage = {
               id: `tr-${Date.now()}`,
               originalText: result.text,
@@ -333,7 +467,50 @@ export default function TranslationStudioPage() {
     }
   };
 
-  // Mapped statuses
+  // Speech playback controls
+  const handleStartVoice = () => {
+    setIsVoiceEnabled(true);
+  };
+
+  const handleStopVoice = () => {
+    setIsVoiceEnabled(false);
+    if (synthesisQueueRef.current) {
+      synthesisQueueRef.current.stopAll();
+    }
+  };
+
+  const handleStopAllSpeech = () => {
+    if (synthesisQueueRef.current) {
+      synthesisQueueRef.current.stopAll();
+    }
+  };
+
+  const handleClearSpeechQueue = () => {
+    if (synthesisQueueRef.current) {
+      synthesisQueueRef.current.clearQueue();
+    }
+  };
+
+  // Playback handlers from translated cards list items
+  const handlePlaySpeechItem = (text: string, langCode: string, key: string) => {
+    const voiceName = voicesList[langCode] || "en-US-AvaMultilingualNeural";
+    if (synthesisQueueRef.current) {
+      synthesisQueueRef.current.enqueue(text, langCode, voiceName);
+    }
+  };
+
+  const handlePauseSpeechItem = (key: string) => {
+    if (synthesisQueueRef.current) {
+      synthesisQueueRef.current.pause();
+    }
+  };
+
+  const handleStopSpeechItem = (key: string) => {
+    if (synthesisQueueRef.current) {
+      synthesisQueueRef.current.stopAll();
+    }
+  };
+
   const getSessionStatus = () => {
     if (isListening || isTranslating) return "ACTIVE";
     return "IDLE";
@@ -431,11 +608,17 @@ export default function TranslationStudioPage() {
             synthesisLatency={synthesisLatency}
             totalPipelineLatency={totalPipelineLatency}
             
-            // Module 10 stats
+            // Metrics
             recognitionStatus={isListening ? "Listening" : "Idle"}
             translationStatus={isTranslating ? translationStatus : "Idle"}
             messagesProcessed={messagesProcessed}
             provider="Azure Cognitive AI"
+            
+            // Synthesis props (Module 11)
+            speechEngine="Azure Speech Synthesis"
+            currentVoice={currentVoice}
+            voiceQueueCount={voiceQueueCount}
+            messagesSpoken={messagesSpoken}
           />
         </div>
 
@@ -448,6 +631,12 @@ export default function TranslationStudioPage() {
               recognitionState={recognitionState}
               onClearTranscripts={handleClearTranscripts}
               onExportTranscripts={handleExportTranscripts}
+              
+              // Speech controllers (Module 11)
+              speechStatuses={speechStatuses}
+              onPlaySpeech={handlePlaySpeechItem}
+              onPauseSpeech={handlePauseSpeechItem}
+              onStopSpeech={handleStopSpeechItem}
             />
           </div>
           <SessionControls
@@ -460,6 +649,13 @@ export default function TranslationStudioPage() {
             onStopTranslation={handleStopTranslation}
             onRetryFailed={handleRetryFailed}
             onClearQueue={handleClearTranscripts}
+
+            // Voice Speech Controls
+            isVoiceEnabled={isVoiceEnabled}
+            onStartVoice={handleStartVoice}
+            onStopVoice={handleStopVoice}
+            onStopAllSpeech={handleStopAllSpeech}
+            onClearSpeechQueue={handleClearSpeechQueue}
             
             isAzureConfigured={isAzureConfigured}
             hasFailedTranslations={hasFailedTranslations}
@@ -475,7 +671,7 @@ export default function TranslationStudioPage() {
             azureTranslatorStatus={isTranslating ? "Connected" : "Disabled"}
             azureTranslatorLatency={translationLatency}
             
-            azureSynthesisStatus={isListening ? "Connected" : "Disabled"}
+            azureSynthesisStatus={isVoiceEnabled && isListening ? "Connected" : "Disabled"}
             azureSynthesisLatency={synthesisLatency}
             
             elevenLabsStatus="Connected"
@@ -483,6 +679,11 @@ export default function TranslationStudioPage() {
             
             openAiStatus="Connected"
             openAiLatency={translationLatency}
+
+            // Audio & queue (Module 11)
+            outputDeviceName={speakerStatus}
+            voiceQueueCount={voiceQueueCount}
+            averageSpeechLatency={averageSpeechLatency}
           />
         </div>
       </div>
