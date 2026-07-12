@@ -1,12 +1,14 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { TranslationEvent } from "@/types/event";
+import { createClient } from "@/supabase/client";
+import { EventRepository } from "@/lib/database/repositories/EventRepository";
 
 interface EventContextType {
   events: TranslationEvent[];
-  createEvent: (eventData: Omit<TranslationEvent, "id" | "createdAt" | "updatedAt" | "createdBy" | "updatedBy" | "organizationId" | "ownerId">) => void;
-  updateEvent: (id: string, eventData: Partial<TranslationEvent>) => void;
+  createEvent: (eventData: Omit<TranslationEvent, "id" | "createdAt" | "updatedAt" | "createdBy" | "updatedBy" | "organizationId" | "ownerId">) => Promise<void>;
+  updateEvent: (id: string, eventData: Partial<TranslationEvent>) => Promise<void>;
   deleteEventPlaceholder: (id: string) => void;
   duplicateEventPlaceholder: (id: string) => void;
 }
@@ -42,13 +44,53 @@ const INITIAL_EVENTS: TranslationEvent[] = [
 
 export function EventProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<TranslationEvent[]>(INITIAL_EVENTS);
+  const [eventRepo, setEventRepo] = useState<EventRepository | null>(null);
 
-  const createEvent = (
+  useEffect(() => {
+    const client = createClient();
+    const repo = new EventRepository(client);
+    setEventRepo(repo);
+
+    async function loadEvents() {
+      try {
+        const dbEvents = await repo.findAll();
+        if (dbEvents && dbEvents.length > 0) {
+          setEvents(dbEvents);
+        } else {
+          setEvents(INITIAL_EVENTS);
+        }
+      } catch (error) {
+        console.warn("Failed to load events from Supabase, using initial fallback:", error);
+        setEvents(INITIAL_EVENTS);
+      }
+    }
+
+    loadEvents();
+  }, []);
+
+  const createEvent = async (
     eventData: Omit<TranslationEvent, "id" | "createdAt" | "updatedAt" | "createdBy" | "updatedBy" | "organizationId" | "ownerId">
   ) => {
-    const newEvent: TranslationEvent = {
+    if (eventRepo) {
+      try {
+        const newEvent = await eventRepo.create({
+          ...eventData,
+          organizationId: "org-aether-main",
+          ownerId: "usr-admin-001",
+          createdBy: "admin@aethervox.com",
+          updatedBy: "admin@aethervox.com",
+        });
+        setEvents((prev) => [newEvent, ...prev]);
+        return;
+      } catch (error) {
+        console.warn("Failed to insert event in Supabase, using local fallback state:", error);
+      }
+    }
+
+    // Fallback to local memory state
+    const fallbackEvent: TranslationEvent = {
       ...eventData,
-      id: `evt-${Math.random().toString(36).substring(2, 9)}`,
+      id: `evt-mock-${Math.random().toString(36).substring(2, 9)}`,
       organizationId: "org-aether-main",
       ownerId: "usr-admin-001",
       createdBy: "admin@aethervox.com",
@@ -56,10 +98,26 @@ export function EventProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setEvents((prev) => [newEvent, ...prev]);
+    setEvents((prev) => [fallbackEvent, ...prev]);
   };
 
-  const updateEvent = (id: string, eventData: Partial<TranslationEvent>) => {
+  const updateEvent = async (id: string, eventData: Partial<TranslationEvent>) => {
+    if (eventRepo && !id.startsWith("evt-mock-")) {
+      try {
+        const updated = await eventRepo.update(id, {
+          ...eventData,
+          updatedBy: "admin@aethervox.com",
+        });
+        setEvents((prev) =>
+          prev.map((event) => (event.id === id ? updated : event))
+        );
+        return;
+      } catch (error) {
+        console.warn("Failed to update event in Supabase, using local fallback state:", error);
+      }
+    }
+
+    // Fallback update
     setEvents((prev) =>
       prev.map((event) =>
         event.id === id
