@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Info } from "lucide-react";
+import { Activity, Info, Volume2, ShieldCheck, AlertCircle } from "lucide-react";
 
 export type EngineStatus = "Connected" | "Connecting" | "Error" | "Disabled";
 
@@ -19,6 +19,11 @@ interface AIStatusPanelProps {
   
   openAiStatus?: EngineStatus;
   openAiLatency?: string;
+
+  // Module 11 additional fields
+  outputDeviceName?: string;
+  voiceQueueCount?: number;
+  averageSpeechLatency?: string;
 }
 
 export function AIStatusPanel({
@@ -32,27 +37,30 @@ export function AIStatusPanel({
   elevenLabsLatency = "-- ms",
   openAiStatus = "Disabled",
   openAiLatency = "-- ms",
+  outputDeviceName = "Default Output Speaker",
+  voiceQueueCount = 0,
+  averageSpeechLatency = "-- ms",
 }: AIStatusPanelProps) {
   const integrations = [
     {
-      name: "Azure Speech Service",
+      name: "Azure Speech Recognition",
       status: azureSpeechStatus,
       region: "Central India (Pune)",
-      connection: azureSpeechStatus === "Connected" ? "WebSocket Active" : azureSpeechStatus === "Connecting" ? "Connecting..." : "Disconnected",
+      connection: azureSpeechStatus === "Connected" ? "WebSocket Active" : "Disconnected",
       latency: azureSpeechLatency,
     },
     {
-      name: "Azure Neural Translator",
+      name: "Azure Translator Engine",
       status: azureTranslatorStatus,
       region: "Global (Multi-region)",
-      connection: azureTranslatorStatus === "Connected" ? "API Route Ready" : azureTranslatorStatus === "Connecting" ? "Connecting..." : "Disabled",
+      connection: azureTranslatorStatus === "Connected" ? "API Route Active" : "Disabled",
       latency: azureTranslatorLatency,
     },
     {
-      name: "Azure Neural Synthesis (TTS)",
+      name: "Azure Speech Synthesis (TTS)",
       status: azureSynthesisStatus,
       region: "Central India (Pune)",
-      connection: azureSynthesisStatus === "Connected" ? "Stream Ready" : "Disabled",
+      connection: azureSynthesisStatus === "Connected" ? "Playback Ready" : "Disabled",
       latency: azureSynthesisLatency,
     },
     {
@@ -63,10 +71,10 @@ export function AIStatusPanel({
       latency: elevenLabsLatency,
     },
     {
-      name: "OpenAI LLM Engine",
+      name: "OpenAI Translation LLM",
       status: openAiStatus,
       region: "US East (Virginia)",
-      connection: openAiStatus === "Connected" ? "API Endpoint Active" : "Disabled",
+      connection: openAiStatus === "Connected" ? "Endpoint Active" : "Disabled",
       latency: openAiLatency,
     },
   ];
@@ -92,25 +100,49 @@ export function AIStatusPanel({
 
   return (
     <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-5 space-y-5">
-      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 shrink-0">
         <h3 className="text-xs font-bold text-white uppercase tracking-wider">
           AI Engine Status
         </h3>
         <Activity className="h-3.5 w-3.5 text-zinc-500" />
       </div>
 
-      <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
+      {/* Synthesis Live Queue Metrics Summary */}
+      <div className="rounded-lg bg-zinc-950/50 border border-white/[0.04] p-3 text-[10px] space-y-2">
+        <span className="text-[9px] font-bold text-zinc-500 uppercase block tracking-wider">
+          Voice Playback Pipeline
+        </span>
+        <div className="grid grid-cols-2 gap-3 text-zinc-400">
+          <div>
+            <span className="text-zinc-650 block font-semibold">Active Destination</span>
+            <span className="text-zinc-200 font-bold block truncate mt-0.5" title={outputDeviceName}>
+              {outputDeviceName}
+            </span>
+          </div>
+          <div>
+            <span className="text-zinc-650 block font-semibold">Voice Queue Size</span>
+            <span className="text-accent-purple font-extrabold block mt-0.5 text-xs font-mono">
+              {voiceQueueCount} items
+            </span>
+          </div>
+          <div className="col-span-2 border-t border-white/[0.02] pt-1.5 flex justify-between">
+            <span className="text-zinc-650 font-semibold">Avg TTS Latency</span>
+            <span className="text-electric-blue font-bold font-mono">{averageSpeechLatency}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar shrink-0">
         {integrations.map((item) => {
           const config = statusConfigs[item.status];
 
           return (
             <div
               key={item.name}
-              className={`rounded-lg border p-3.5 space-y-3 transition-colors ${
-                item.status === "Disabled" ? "border-white/[0.02] bg-zinc-950/20" : "border-white/[0.04] bg-zinc-950/40"
+              className={`rounded-lg border p-3 transition-colors ${
+                item.status === "Disabled" ? "border-white/[0.02] bg-zinc-950/10" : "border-white/[0.04] bg-zinc-950/30"
               }`}
             >
-              {/* Header: Service Name & Status Badge */}
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-5 w-5 items-center justify-center rounded bg-zinc-900 border border-white/[0.06] text-zinc-500">
@@ -127,7 +159,6 @@ export function AIStatusPanel({
                 </div>
               </div>
 
-              {/* Grid: Detailed stats */}
               <div className="grid grid-cols-3 gap-2 border-t border-white/[0.03] pt-2 text-[9px] font-medium text-zinc-400">
                 <div>
                   <span className="text-zinc-500 block uppercase font-semibold">Region</span>
@@ -151,13 +182,6 @@ export function AIStatusPanel({
             </div>
           );
         })}
-      </div>
-
-      <div className="rounded-lg bg-zinc-950/40 border border-white/[0.03] p-3 text-[10px] text-zinc-500 leading-normal flex gap-1.5">
-        <Info className="h-4 w-4 text-zinc-600 shrink-0 mt-0.5" />
-        <p>
-          Configured engines transition to <span className="text-emerald-400 font-semibold">Connected</span> state once continuous streaming begins.
-        </p>
       </div>
     </div>
   );
