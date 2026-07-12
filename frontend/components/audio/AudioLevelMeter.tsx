@@ -4,51 +4,22 @@ import { useEffect, useState } from "react";
 import { Mic, Volume2 } from "lucide-react";
 
 interface AudioLevelMeterProps {
+  inputL: number;
+  inputR: number;
+  outputL: number;
+  outputR: number;
   isTestingInput: boolean;
   isTestingOutput: boolean;
 }
 
-export function AudioLevelMeter({ isTestingInput, isTestingOutput }: AudioLevelMeterProps) {
-  const [inputL, setInputL] = useState(10);
-  const [inputR, setInputR] = useState(8);
-  const [outputL, setOutputL] = useState(5);
-  const [outputR, setOutputR] = useState(5);
-
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-
-    if (isTestingInput || isTestingOutput) {
-      intervalId = setInterval(() => {
-        if (isTestingInput) {
-          // Fluctuating input signal
-          setInputL(Math.floor(Math.random() * 65) + 20); // 20% to 85%
-          setInputR(Math.floor(Math.random() * 60) + 20);
-        } else {
-          setInputL(5 + Math.random() * 5); // Ambient rest
-          setInputR(4 + Math.random() * 4);
-        }
-
-        if (isTestingOutput) {
-          // Fluctuating output signal (sine wave pattern mimic)
-          setOutputL(Math.floor(Math.random() * 70) + 15);
-          setOutputR(Math.floor(Math.random() * 75) + 15);
-        } else {
-          setOutputL(3 + Math.random() * 3);
-          setOutputR(3 + Math.random() * 3);
-        }
-      }, 100);
-    } else {
-      // Resting ambient state
-      setInputL(6);
-      setInputR(5);
-      setOutputL(4);
-      setOutputR(4);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [isTestingInput, isTestingOutput]);
+export function AudioLevelMeter({
+  inputL,
+  inputR,
+  outputL,
+  outputR,
+  isTestingInput,
+  isTestingOutput,
+}: AudioLevelMeterProps) {
 
   const renderMeterBars = (percentage: number) => {
     // Generate 20 small segments
