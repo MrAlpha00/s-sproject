@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, ShieldCheck, AlertCircle, Sparkles } from "lucide-react";
+import { MessageSquare, Sparkles, Trash2, Download } from "lucide-react";
 
 export interface TranscriptItem {
   id: string;
@@ -14,9 +14,17 @@ interface TranslationPreviewProps {
   transcripts: TranscriptItem[];
   interimText: string;
   recognitionState: string;
+  onClearTranscripts: () => void;
+  onExportTranscripts: () => void;
 }
 
-export function TranslationPreview({ transcripts, interimText, recognitionState }: TranslationPreviewProps) {
+export function TranslationPreview({
+  transcripts,
+  interimText,
+  recognitionState,
+  onClearTranscripts,
+  onExportTranscripts,
+}: TranslationPreviewProps) {
   const getConfidenceColor = (score?: number) => {
     if (!score) return "text-zinc-500 border-white/[0.06] bg-zinc-950";
     if (score >= 90) return "text-emerald-400 border-emerald-500/20 bg-emerald-500/5";
@@ -26,17 +34,45 @@ export function TranslationPreview({ transcripts, interimText, recognitionState 
 
   return (
     <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-5 flex flex-col h-[400px]">
-      {/* Header */}
+      {/* Header Panel */}
       <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-4">
         <h3 className="text-xs font-bold text-white uppercase tracking-wider">
           Live Translation Preview
         </h3>
         
-        <div className="flex items-center gap-2">
-          <span className={`flex h-1.5 w-1.5 rounded-full ${recognitionState === "Listening" ? "bg-emerald-500 animate-pulse" : "bg-zinc-600"}`} />
-          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-            {recognitionState}
-          </span>
+        <div className="flex items-center gap-3">
+          {/* Controls Deck */}
+          {transcripts.length > 0 && (
+            <div className="flex items-center gap-1.5 border-r border-white/[0.06] pr-3 mr-1">
+              {/* Export TXT */}
+              <button
+                type="button"
+                onClick={onExportTranscripts}
+                className="p-1 rounded bg-zinc-800 border border-white/[0.06] hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                title="Export transcript as TXT"
+              >
+                <Download className="h-3 w-3" />
+              </button>
+
+              {/* Clear */}
+              <button
+                type="button"
+                onClick={onClearTranscripts}
+                className="p-1 rounded bg-zinc-850 border border-red-500/10 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 transition-colors"
+                title="Clear transcript feed"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Connection Status Indicator */}
+          <div className="flex items-center gap-1.5">
+            <span className={`flex h-1.5 w-1.5 rounded-full ${recognitionState === "Listening" ? "bg-emerald-500 animate-pulse" : "bg-zinc-600"}`} />
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+              {recognitionState}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -64,7 +100,7 @@ export function TranslationPreview({ transcripts, interimText, recognitionState 
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-white uppercase tracking-wider">{block.speaker}</span>
-                    <span className="text-[9px] text-zinc-500 font-medium">({block.lang})</span>
+                    <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">({block.lang})</span>
                   </div>
 
                   {block.confidence !== undefined && (
@@ -90,7 +126,7 @@ export function TranslationPreview({ transcripts, interimText, recognitionState 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Live Input</span>
-                  <span className="text-[8px] text-zinc-600 font-bold uppercase">Recognizing...</span>
+                  <span className="text-[8px] text-zinc-650 font-bold uppercase">Recognizing...</span>
                 </div>
                 <p className="text-xs text-zinc-400 mt-1 leading-relaxed italic">
                   {interimText}

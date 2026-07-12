@@ -1,8 +1,13 @@
 "use client";
 
 import { useEvents } from "@/providers/EventProvider";
-import { Info, Volume2, Languages, Mic, Sparkles } from "lucide-react";
+import { Info } from "lucide-react";
 import { useEffect } from "react";
+
+export interface PoolOption {
+  value: string;
+  label: string;
+}
 
 interface TranslationConfigPanelProps {
   selectedEventId: string;
@@ -35,40 +40,16 @@ interface TranslationConfigPanelProps {
   setCaptionsEnabled: (enabled: boolean) => void;
   recordingEnabled: boolean;
   setRecordingEnabled: (enabled: boolean) => void;
+
+  // Dynamically injected pools
+  languagesPool: PoolOption[];
+  voiceProfilesPool: string[];
+  audioInputsPool: PoolOption[];
+  audioOutputsPool: PoolOption[];
+  speechProvidersPool: PoolOption[];
+  translationProvidersPool: PoolOption[];
+  voiceEnginesPool: PoolOption[];
 }
-
-const LANGUAGES_POOL = [
-  "English (US)",
-  "English (UK)",
-  "Spanish (ES)",
-  "French (FR)",
-  "German (DE)",
-  "Mandarin (ZH)",
-  "Japanese (JA)",
-  "Italian (IT)",
-  "Korean (KO)",
-];
-
-const VOICE_PROFILES_POOL = [
-  "Enterprise Voice Male A (Cloned)",
-  "Enterprise Voice Female B (Cloned)",
-  "Standard Neutral Narrator Male",
-  "Standard Professional Presenter Female",
-];
-
-const AUDIO_INPUTS = [
-  "Audio Channel 1 (Shure SM7B Mic)",
-  "Audio Channel 2 (Sennheiser Array)",
-  "Audio Channel 3 (OBS Virtual Cable)",
-  "Default System Audio Input",
-];
-
-const AUDIO_OUTPUTS = [
-  "Audio Channel Out 1 (AetherVOX Mixer)",
-  "Audio Channel Out 2 (OBS Audio In)",
-  "Audio Channel Out 3 (Speakers)",
-  "Default System Audio Output",
-];
 
 export function TranslationConfigPanel({
   selectedEventId,
@@ -101,6 +82,14 @@ export function TranslationConfigPanel({
   setCaptionsEnabled,
   recordingEnabled,
   setRecordingEnabled,
+
+  languagesPool,
+  voiceProfilesPool,
+  audioInputsPool,
+  audioOutputsPool,
+  speechProvidersPool,
+  translationProvidersPool,
+  voiceEnginesPool,
 }: TranslationConfigPanelProps) {
   const { events } = useEvents();
 
@@ -116,18 +105,30 @@ export function TranslationConfigPanel({
         setLatencyMode(event.latencyMode);
         setProfanityFilter(event.profanityFilter);
         setTargetVocabulary(event.targetVocabulary);
-        setInputDevice(event.inputDevice.replace("Mic", "Mic Channel"));
-        setOutputDevice(event.outputDevice.replace("Mixer", "Mixer Channel"));
+        setInputDevice(event.inputDevice);
+        setOutputDevice(event.outputDevice);
       }
     }
-  }, [selectedEventId, events, setSourceLanguage, setTargetLanguages, setVoiceProfile, setTranslationModel, setLatencyMode, setProfanityFilter, setTargetVocabulary, setInputDevice, setOutputDevice]);
+  }, [
+    selectedEventId,
+    events,
+    setSourceLanguage,
+    setTargetLanguages,
+    setVoiceProfile,
+    setTranslationModel,
+    setLatencyMode,
+    setProfanityFilter,
+    setTargetVocabulary,
+    setInputDevice,
+    setOutputDevice,
+  ]);
 
-  const handleToggleTarget = (lang: string) => {
-    if (lang === sourceLanguage) return;
-    if (targetLanguages.includes(lang)) {
-      setTargetLanguages(targetLanguages.filter((l) => l !== lang));
+  const handleToggleTarget = (langVal: string) => {
+    if (langVal === sourceLanguage) return;
+    if (targetLanguages.includes(langVal)) {
+      setTargetLanguages(targetLanguages.filter((l) => l !== langVal));
     } else {
-      setTargetLanguages([...targetLanguages, lang]);
+      setTargetLanguages([...targetLanguages, langVal]);
     }
   };
 
@@ -169,9 +170,9 @@ export function TranslationConfigPanel({
           }}
           className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-300 focus:outline-none"
         >
-          {LANGUAGES_POOL.map((lang) => (
-            <option key={lang} value={lang}>
-              {lang}
+          {languagesPool.map((lang) => (
+            <option key={lang.value} value={lang.value}>
+              {lang.label}
             </option>
           ))}
         </select>
@@ -183,16 +184,16 @@ export function TranslationConfigPanel({
           Target Languages
         </label>
         <div className="flex flex-wrap gap-1.5 p-2 rounded-lg border border-white/[0.04] bg-zinc-950/40">
-          {LANGUAGES_POOL.map((lang) => {
-            const isSource = lang === sourceLanguage;
-            const isSelected = targetLanguages.includes(lang);
+          {languagesPool.map((lang) => {
+            const isSource = lang.value === sourceLanguage;
+            const isSelected = targetLanguages.includes(lang.value);
 
             return (
               <button
                 type="button"
-                key={lang}
+                key={lang.value}
                 disabled={isSource}
-                onClick={() => handleToggleTarget(lang)}
+                onClick={() => handleToggleTarget(lang.value)}
                 className={`rounded px-2 py-1 text-[9px] font-semibold transition-colors border ${
                   isSource
                     ? "bg-zinc-950 border-white/[0.02] text-zinc-700 cursor-not-allowed"
@@ -201,7 +202,7 @@ export function TranslationConfigPanel({
                     : "bg-zinc-950 border-white/[0.04] text-zinc-400 hover:text-white"
                 }`}
               >
-                {lang}
+                {lang.label.split(" (")[0]}
               </button>
             );
           })}
@@ -218,15 +219,19 @@ export function TranslationConfigPanel({
           onChange={(e) => setVoiceProfile(e.target.value)}
           className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-300 focus:outline-none"
         >
-          {VOICE_PROFILES_POOL.map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
+          {voiceProfilesPool.length > 0 ? (
+            voiceProfilesPool.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))
+          ) : (
+            <option value="none">No voices available</option>
+          )}
         </select>
       </div>
 
-      {/* Audio Channel Routing (Replaces Microphone) */}
+      {/* Audio Channel Routing */}
       <div className="space-y-3 border-t border-white/[0.04] pt-4">
         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
           Audio Channel Routing
@@ -240,9 +245,9 @@ export function TranslationConfigPanel({
               onChange={(e) => setInputDevice(e.target.value)}
               className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-300 focus:outline-none"
             >
-              {AUDIO_INPUTS.map((input) => (
-                <option key={input} value={input}>
-                  {input}
+              {audioInputsPool.map((input) => (
+                <option key={input.value} value={input.value}>
+                  {input.label}
                 </option>
               ))}
             </select>
@@ -255,9 +260,9 @@ export function TranslationConfigPanel({
               onChange={(e) => setOutputDevice(e.target.value)}
               className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-300 focus:outline-none"
             >
-              {AUDIO_OUTPUTS.map((output) => (
-                <option key={output} value={output}>
-                  {output}
+              {audioOutputsPool.map((output) => (
+                <option key={output.value} value={output.value}>
+                  {output.label}
                 </option>
               ))}
             </select>
@@ -265,7 +270,7 @@ export function TranslationConfigPanel({
         </div>
       </div>
 
-      {/* Placeholders (Engine specifications) */}
+      {/* AI Engine Providers */}
       <div className="space-y-3 border-t border-white/[0.04] pt-4">
         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
           AI Engine Providers
@@ -278,10 +283,13 @@ export function TranslationConfigPanel({
             <select
               value={speechProvider}
               onChange={(e) => setSpeechProvider(e.target.value)}
-              className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-400 focus:outline-none"
+              className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-300 focus:outline-none"
             >
-              <option value="azure">Azure Cognitive Speech Services (Default)</option>
-              <option value="whisper">OpenAI Whisper Real-Time Stream (Placeholder)</option>
+              {speechProvidersPool.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -291,10 +299,13 @@ export function TranslationConfigPanel({
             <select
               value={translationProvider}
               onChange={(e) => setTranslationProvider(e.target.value)}
-              className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-400 focus:outline-none"
+              className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-300 focus:outline-none"
             >
-              <option value="azure-translator">Azure Neural Translator V3 (Default)</option>
-              <option value="deepl">DeepL Pro Translation Stream (Placeholder)</option>
+              {translationProvidersPool.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -304,10 +315,13 @@ export function TranslationConfigPanel({
             <select
               value={outputVoiceEngine}
               onChange={(e) => setOutputVoiceEngine(e.target.value)}
-              className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-400 focus:outline-none"
+              className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-300 focus:outline-none"
             >
-              <option value="elevenlabs">ElevenLabs Speech Synthesis (Default)</option>
-              <option value="azure-tts">Azure Custom Neural Voice TTS (Placeholder)</option>
+              {voiceEnginesPool.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -317,7 +331,7 @@ export function TranslationConfigPanel({
             <select
               value={latencyMode}
               onChange={(e) => setLatencyMode(e.target.value as any)}
-              className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-400 focus:outline-none"
+              className="h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-950 px-2.5 text-xs text-zinc-300 focus:outline-none"
             >
               <option value="low-latency">Low-Latency (Sub-Second Translation)</option>
               <option value="standard">Standard (Sentence Boundary Analysis)</option>
