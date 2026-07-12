@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import DashboardLayoutComponent from "@/components/dashboard/DashboardLayout";
 
 export const metadata: Metadata = {
   title: "Dashboard | AetherVOX",
@@ -10,5 +11,6 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return <DashboardLayoutComponent>{children}</DashboardLayoutComponent>;
 }
+
