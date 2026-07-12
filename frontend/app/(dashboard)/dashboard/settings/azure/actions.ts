@@ -1,6 +1,6 @@
 "use server";
 
-import { getAzureConfig } from "@/lib/azure/config";
+import { getAzureConfig, getAzureSecrets } from "@/lib/azure/config";
 import { SpeechService } from "@/lib/azure/services/SpeechService";
 import { TranslatorService } from "@/lib/azure/services/TranslatorService";
 import { AzureDiagnosticResult } from "@/lib/azure/types";
