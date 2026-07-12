@@ -93,7 +93,9 @@ export function AudioDeviceCard({ device, onSelect }: AudioDeviceCardProps) {
                   {device.name}
                 </span>
                 {device.isDefault && (
-                  <Star className="h-3 w-3 text-amber-400 fill-current shrink-0" title="Default Device" />
+                  <span title="Default Device" className="shrink-0">
+                    <Star className="h-3 w-3 text-amber-400 fill-current" />
+                  </span>
                 )}
               </div>
               <p className="text-[10px] text-zinc-500 font-medium truncate">
