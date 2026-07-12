@@ -20,6 +20,7 @@ export class TranslationPipeline {
   private onMessageUpdateCallbacks: UpdateCallback[] = [];
   private onQueueChangeCallbacks: QueueChangeCallback[] = [];
   private onMetricsCallbacks: MetricsCallback[] = [];
+  private onCompleteCallback: ((msg: TranslationMessage) => void) | null = null;
 
   // Metrics
   private totalTranslationTime = 0;
@@ -29,6 +30,10 @@ export class TranslationPipeline {
 
   constructor() {
     this.translationService = new TranslationService();
+  }
+
+  registerOnComplete(cb: (msg: TranslationMessage) => void) {
+    this.onCompleteCallback = cb;
   }
 
   registerCallbacks(callbacks: {
@@ -149,6 +154,11 @@ export class TranslationPipeline {
 
             this.totalTranslationTime += msg.translationLatency;
             this.processedCount++;
+            
+            // Invoke completed hook if registered
+            if (this.onCompleteCallback) {
+              this.onCompleteCallback(msg);
+            }
           }
         } catch (err) {
           console.warn(`Translation attempt ${attempts} failed for msg ${msg.id}`);

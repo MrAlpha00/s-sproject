@@ -1,7 +1,14 @@
 "use client";
 
-import { MessageSquare, Sparkles, Trash2, Download, Check, AlertCircle, RefreshCw } from "lucide-react";
+import { MessageSquare, Sparkles, Trash2, Download, Check, AlertCircle, RefreshCw, Volume2, Pause, Square } from "lucide-react";
 import { TranslationMessage } from "@/types/translation";
+
+export interface SpeechStatusInfo {
+  voice: string;
+  status: "Pending" | "Synthesizing" | "Playing" | "Paused" | "Completed" | "Failed";
+  latency: number;
+  duration: number;
+}
 
 interface TranslationPreviewProps {
   transcripts: TranslationMessage[];
@@ -9,6 +16,12 @@ interface TranslationPreviewProps {
   recognitionState: string;
   onClearTranscripts: () => void;
   onExportTranscripts: () => void;
+
+  // Module 11 speech bindings
+  speechStatuses: Record<string, SpeechStatusInfo>;
+  onPlaySpeech: (text: string, lang: string, key: string) => void;
+  onPauseSpeech: (key: string) => void;
+  onStopSpeech: (key: string) => void;
 }
 
 export function TranslationPreview({
@@ -17,6 +30,10 @@ export function TranslationPreview({
   recognitionState,
   onClearTranscripts,
   onExportTranscripts,
+  speechStatuses,
+  onPlaySpeech,
+  onPauseSpeech,
+  onStopSpeech,
 }: TranslationPreviewProps) {
   const getConfidenceColor = (score?: number) => {
     if (!score) return "text-zinc-500 border-white/[0.06] bg-zinc-950";
@@ -35,6 +52,24 @@ export function TranslationPreview({
       case "Failed":
       default:
         return <AlertCircle className="h-3 w-3 text-red-400 shrink-0" />;
+    }
+  };
+
+  const getSpeechStatusColor = (status: string) => {
+    switch (status) {
+      case "Playing":
+        return "text-emerald-400 border-emerald-500/20 bg-emerald-500/5";
+      case "Synthesizing":
+        return "text-amber-400 border-amber-500/20 bg-amber-500/5 animate-pulse";
+      case "Paused":
+        return "text-zinc-400 border-white/[0.04] bg-zinc-950/20";
+      case "Completed":
+        return "text-blue-400 border-blue-500/20 bg-blue-500/5";
+      case "Failed":
+        return "text-red-400 border-red-500/20 bg-red-500/5";
+      case "Pending":
+      default:
+        return "text-zinc-650 border-white/[0.02] bg-zinc-950/10";
     }
   };
 
@@ -74,7 +109,7 @@ export function TranslationPreview({
 
           {/* Connection Status Indicator */}
           <div className="flex items-center gap-1.5">
-            <span className={`flex h-1.5 w-1.5 rounded-full ${recognitionState === "Listening" ? "bg-emerald-500 animate-pulse" : "bg-zinc-650"}`} />
+            <span className={`flex h-1.5 w-1.5 rounded-full ${recognitionState === "Listening" ? "bg-emerald-500 animate-pulse" : "bg-zinc-600"}`} />
             <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
               {recognitionState}
             </span>
@@ -136,24 +171,33 @@ export function TranslationPreview({
               </div>
 
               {/* Nested translation results */}
-              <div className="pl-8 border-l border-white/[0.04] space-y-3">
+              <div className="pl-8 border-l border-white/[0.04] space-y-4">
                 {block.targetLanguage.map((langCode) => {
                   const translationText = block.translatedText[langCode];
                   const hasTranslation = !!translationText;
                   const isTranslating = block.status === "Translating" || block.status === "Pending";
                   const isFailed = block.status === "Failed" && !hasTranslation;
 
+                  // Retrieve dynamic Speech status details
+                  const speechKey = `${block.id}-${langCode}`;
+                  const speechInfo = speechStatuses[speechKey] || {
+                    voice: "Matching...",
+                    status: "Pending",
+                    latency: 0,
+                    duration: 0,
+                  };
+
                   return (
-                    <div key={langCode} className="space-y-1">
+                    <div key={langCode} className="space-y-1.5">
                       {/* Translation block header info */}
-                      <div className="flex items-center justify-between gap-4 text-[9px] font-bold uppercase tracking-wider">
-                        <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-3 text-[9px] font-bold uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="rounded bg-zinc-900/60 border border-white/[0.04] px-1.5 py-0.2 text-zinc-400 font-mono">
                             {langCode}
                           </span>
                           <span className="text-zinc-500">➔</span>
                           <span className="rounded bg-electric-blue/5 border border-electric-blue/10 px-1 py-0.2 text-electric-blue text-[8px] font-extrabold">
-                            Azure
+                            Azure Translator
                           </span>
                         </div>
 
@@ -165,7 +209,7 @@ export function TranslationPreview({
                       </div>
 
                       {/* Content */}
-                      <p className={`text-xs leading-relaxed mt-1 ${
+                      <p className={`text-xs leading-relaxed ${
                         isFailed ? "text-red-400 italic" : isTranslating ? "text-zinc-500 italic" : "text-zinc-300"
                       }`}>
                         {isFailed 
@@ -174,6 +218,57 @@ export function TranslationPreview({
                             ? "Translating phrase..." 
                             : translationText}
                       </p>
+
+                      {/* Speech Synthesis controls row */}
+                      {hasTranslation && (
+                        <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-950/40 rounded-lg p-2 border border-white/[0.02] text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+                          {/* Audio playback controls */}
+                          <div className="flex items-center gap-1.5">
+                            {speechInfo.status === "Playing" ? (
+                              <button
+                                type="button"
+                                onClick={() => onPauseSpeech(speechKey)}
+                                className="flex h-5.5 w-5.5 items-center justify-center rounded bg-zinc-900 border border-white/[0.06] text-zinc-400 hover:text-white transition-colors"
+                              >
+                                <Pause className="h-2.5 w-2.5" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => onPlaySpeech(translationText, langCode, speechKey)}
+                                className="flex h-5.5 w-5.5 items-center justify-center rounded bg-electric-blue/10 border border-electric-blue/20 text-electric-blue hover:bg-electric-blue/20 transition-colors"
+                              >
+                                <Volume2 className="h-2.5 w-2.5" />
+                              </button>
+                            )}
+
+                            {(speechInfo.status === "Playing" || speechInfo.status === "Paused" || speechInfo.status === "Synthesizing") && (
+                              <button
+                                type="button"
+                                onClick={() => onStopSpeech(speechKey)}
+                                className="flex h-5.5 w-5.5 items-center justify-center rounded bg-zinc-900 border border-red-500/20 text-zinc-400 hover:text-red-400 transition-colors"
+                              >
+                                <Square className="h-2.5 w-2.5 fill-current" />
+                              </button>
+                            )}
+                            
+                            <span className="font-mono text-zinc-400 truncate max-w-[120px]">
+                              {speechInfo.voice.split("Neural")[0]}
+                            </span>
+                          </div>
+
+                          {/* Speech metrics details */}
+                          <div className="flex items-center gap-2 font-mono text-[8px] text-zinc-650">
+                            <span>TTS: {speechInfo.latency ? `${speechInfo.latency}ms` : "--"}</span>
+                            <span>•</span>
+                            <span>Len: {speechInfo.duration ? `${(speechInfo.duration / 1000).toFixed(1)}s` : "--"}</span>
+                            <span>•</span>
+                            <span className={`px-1 rounded border uppercase font-extrabold ${getSpeechStatusColor(speechInfo.status)}`}>
+                              {speechInfo.status}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -191,7 +286,7 @@ export function TranslationPreview({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Live Input</span>
-                  <span className="text-[8px] text-zinc-655 font-bold uppercase">Recognizing...</span>
+                  <span className="text-[8px] text-zinc-650 font-bold uppercase">Recognizing...</span>
                 </div>
                 <p className="text-xs text-zinc-400 mt-1 leading-relaxed italic">
                   {interimText}
