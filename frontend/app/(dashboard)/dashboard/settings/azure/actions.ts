@@ -94,3 +94,43 @@ export async function saveAzureSettings(data: { speechRegion: string; translator
     return { success: false, message: err.message || "Failed to persist settings." };
   }
 }
+
+export async function getSpeechToken() {
+  const { speechKey, speechRegion } = getAzureSecrets();
+
+  if (!speechKey) {
+    return {
+      success: false,
+      message: "Speech key is not configured on the server environment.",
+    };
+  }
+
+  const tokenEndpoint = `https://${speechRegion}.api.cognitive.microsoft.com/sts/v1.0/issueToken`;
+
+  try {
+    const res = await fetch(tokenEndpoint, {
+      method: "POST",
+      headers: {
+        "Ocp-Apim-Subscription-Key": speechKey,
+        "Content-Length": "0",
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`STS token request failed with status: ${res.status}`);
+    }
+
+    const token = await res.text();
+    return {
+      success: true,
+      token,
+      region: speechRegion,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || "Failed to generate authorization token.",
+    };
+  }
+}
+

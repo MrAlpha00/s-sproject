@@ -1,15 +1,25 @@
 "use client";
 
-import { Info, Wifi, Hourglass, HelpCircle } from "lucide-react";
+import { Info, Wifi, Hourglass, Mic, HelpCircle } from "lucide-react";
 import { useEvents } from "@/providers/EventProvider";
 
 interface SessionInfoCardProps {
   selectedEventId: string;
   status: string;
   latencyMode: string;
+  recognitionLatency: string;
+  microphoneStatus: string;
+  recognitionLanguage: string;
 }
 
-export function SessionInfoCard({ selectedEventId, status, latencyMode }: SessionInfoCardProps) {
+export function SessionInfoCard({
+  selectedEventId,
+  status,
+  latencyMode,
+  recognitionLatency,
+  microphoneStatus,
+  recognitionLanguage,
+}: SessionInfoCardProps) {
   const { events } = useEvents();
   const linkedEvent = events.find((e) => e.id === selectedEventId);
 
@@ -53,18 +63,31 @@ export function SessionInfoCard({ selectedEventId, status, latencyMode }: Sessio
           </span>
         </div>
 
-        {/* Session ID */}
+        {/* Microphone status */}
         <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
-          <span className="text-zinc-500 font-medium">Session ID</span>
-          <span className="font-mono text-zinc-400 select-all">
-            {selectedEventId === "manual" ? "sess-manual-override" : `sess-${selectedEventId.slice(4)}`}
+          <span className="text-zinc-500 font-medium flex items-center gap-1">
+            Capture Input
+            <Mic className="h-3 w-3 text-zinc-600" />
+          </span>
+          <span className="text-zinc-300 font-semibold truncate max-w-[150px] text-right">
+            {microphoneStatus}
           </span>
         </div>
 
-        {/* Duration */}
+        {/* Recognition language */}
         <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
-          <span className="text-zinc-500 font-medium">Duration</span>
-          <span className="text-zinc-300 font-semibold">00:00:00</span>
+          <span className="text-zinc-500 font-medium">Capture Language</span>
+          <span className="text-zinc-300 font-semibold">
+            {recognitionLanguage}
+          </span>
+        </div>
+
+        {/* Recognition Latency */}
+        <div className="flex items-center justify-between border-b border-white/[0.02] pb-2">
+          <span className="text-zinc-500 font-medium">Recognition Latency</span>
+          <span className="text-electric-blue font-bold">
+            {recognitionLatency}
+          </span>
         </div>
 
         {/* Expected Latency */}
@@ -73,7 +96,7 @@ export function SessionInfoCard({ selectedEventId, status, latencyMode }: Sessio
             Expected Latency
             <Hourglass className="h-3 w-3 text-zinc-600" />
           </span>
-          <span className="text-electric-blue font-bold">
+          <span className="text-zinc-400 font-medium">
             {getLatencyText()}
           </span>
         </div>
@@ -88,7 +111,7 @@ export function SessionInfoCard({ selectedEventId, status, latencyMode }: Sessio
       <div className="rounded-lg bg-zinc-950/40 border border-white/[0.03] p-3 text-[10px] text-zinc-500 leading-normal flex gap-1.5">
         <Info className="h-4 w-4 text-zinc-600 shrink-0 mt-0.5" />
         <p>
-          Configure audio channels and select targeted speech engines on the config panel to optimize expected synthesizer latency.
+          Speech Recognition continuously transcribes locally. Ensure appropriate audio channel levels are calibrated.
         </p>
       </div>
     </div>
