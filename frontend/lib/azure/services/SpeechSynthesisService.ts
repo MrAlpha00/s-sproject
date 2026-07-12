@@ -48,7 +48,7 @@ export class SpeechSynthesisService {
     this.player = new sdk.SpeakerAudioDestination();
     if (deviceId && deviceId !== "default" && !deviceId.startsWith("mock-")) {
       try {
-        this.player.setSinkId(deviceId);
+        (this.player as any).setSinkId(deviceId);
       } catch (err) {
         console.warn("Routing audio destination device sink ID failed, using default output:", err);
       }
