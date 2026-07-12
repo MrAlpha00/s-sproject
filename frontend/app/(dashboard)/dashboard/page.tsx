@@ -1,5 +1,6 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import { useAuth } from "@/hooks/useAuth";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ActionCard } from "@/components/dashboard/ActionCard";
 import { StatusCard } from "@/components/dashboard/StatusCard";
@@ -10,17 +11,14 @@ import {
   BarChart3,
   Mic,
   Languages,
-  ArrowRight,
 } from "lucide-react";
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export default function DashboardPage() {
+  const { user } = useAuth();
 
+  // Return null if user session is not available (handled by DashboardLayout redirect)
   if (!user) {
-    redirect("/login");
+    return null;
   }
 
   const fullName = user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "User";
@@ -60,7 +58,7 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-in fade-in duration-500">
       {/* Header Panel */}
       <div className="relative overflow-hidden rounded-2xl border border-white/[0.04] bg-zinc-900/20 p-6 md:p-8">
         <div className="absolute -left-16 -top-16 h-36 w-36 rounded-full bg-electric-blue/5 blur-3xl pointer-events-none" />
