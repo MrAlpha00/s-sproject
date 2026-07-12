@@ -140,3 +140,17 @@ export interface Subscription {
   createdBy: string;
   updatedBy: string;
 }
+
+export interface AzureSettingsMetadata {
+  id: string;
+  organizationId: string;
+  speechRegion: string;
+  translatorRegion: string;
+  enabled: boolean;
+  lastChecked: string;
+  connectionStatus: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  updatedBy: string;
+}
