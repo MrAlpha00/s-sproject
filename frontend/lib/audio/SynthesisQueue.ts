@@ -140,6 +140,7 @@ export class SynthesisQueue {
 
         msg.latency = result.latency;
         msg.duration = result.duration;
+        msg.audioData = result.audioData;
         msg.status = "Completed";
 
         this.totalLatency += result.latency;

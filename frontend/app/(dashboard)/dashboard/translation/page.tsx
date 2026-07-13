@@ -20,6 +20,19 @@ import { VoiceRepository } from "@/lib/database/repositories/VoiceRepository";
 import { TranslationRepository } from "@/lib/database/repositories/TranslationRepository";
 import { EventRepository } from "@/lib/database/repositories/EventRepository";
 import { SetupProfileRepository } from "@/lib/database/repositories/SetupProfileRepository";
+import { SupabaseStreamingProvider } from "@/lib/streaming/SupabaseStreamingProvider";
+import {
+  Radio,
+  Users,
+  QrCode,
+  Copy,
+  Check,
+  Pause,
+  Play,
+  Square,
+  RefreshCw,
+  ExternalLink,
+} from "lucide-react";
 
 export default function TranslationStudioPage() {
   const { events } = useEvents();
@@ -74,6 +87,41 @@ export default function TranslationStudioPage() {
 
   // Speech status logs mapping
   const [speechStatuses, setSpeechStatuses] = useState<Record<string, SpeechStatusInfo>>({});
+
+  // Live Streaming States (Module 12)
+  const streamingServiceRef = useRef<SupabaseStreamingProvider | null>(null);
+  const [isStreamingActive, setIsStreamingActive] = useState(false);
+  const [streamingSession, setStreamingSession] = useState<any>(null);
+  const [audienceCount, setAudienceCount] = useState(0);
+  const [messagesBroadcasted, setMessagesBroadcasted] = useState(0);
+  const [streamingStatus, setStreamingStatus] = useState<string>("idle");
+  const [sessionState, setSessionState] = useState<string>("idle");
+  const [copied, setCopied] = useState(false);
+  const sequenceNumberRef = useRef(0);
+  const activeSessionRef = useRef<any>(null);
+
+  const selectedEventIdRef = useRef(selectedEventId);
+  useEffect(() => {
+    selectedEventIdRef.current = selectedEventId;
+  }, [selectedEventId]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    const provider = new SupabaseStreamingProvider(supabase);
+    provider.registerStatusCallback((status) => {
+      setStreamingStatus(status);
+    });
+    provider.registerPresenceCallback((count) => {
+      setAudienceCount(count);
+    });
+    streamingServiceRef.current = provider;
+
+    return () => {
+      if (streamingServiceRef.current) {
+        streamingServiceRef.current.cleanupSession();
+      }
+    };
+  }, []);
 
   // Latency & Metrics tracking
   const [averageTranslationTime, setAverageTranslationTime] = useState("-- ms");
@@ -208,6 +256,20 @@ export default function TranslationStudioPage() {
                 }
                 return prev;
               });
+
+              // Broadcast audio packet over Supabase Realtime! (Module 12)
+              if (msg.status === "Completed" && msg.audioData && activeSessionRef.current && streamingServiceRef.current) {
+                streamingServiceRef.current.broadcastAudio({
+                  sessionId: activeSessionRef.current.id,
+                  eventId: selectedEventIdRef.current,
+                  messageId: msg.id,
+                  audioData: msg.audioData,
+                  language: msg.language,
+                  voice: msg.voice,
+                  duration: msg.duration,
+                  sequenceNumber: ++sequenceNumberRef.current,
+                });
+              }
             },
             onMetricsUpdate: (metrics) => {
               setAverageSpeechLatency(`${metrics.averageSynthesisLatency}ms`);
@@ -401,9 +463,25 @@ export default function TranslationStudioPage() {
             }
           });
         }
+
+        // Broadcast translation message over Supabase Realtime (Module 12)
+        if (activeSessionRef.current && streamingServiceRef.current) {
+          streamingServiceRef.current.broadcastTranslation({
+            id: msg.id,
+            sessionId: activeSessionRef.current.id,
+            eventId: selectedEventIdRef.current,
+            originalText: msg.originalText,
+            translatedText: msg.translatedText,
+            sourceLanguage: msg.sourceLanguage,
+            targetLanguages: msg.targetLanguage,
+            voice: voiceProfile,
+            latency: msg.translationLatency,
+          });
+          setMessagesBroadcasted((prev) => prev + 1);
+        }
       });
     }
-  }, [isVoiceEnabled, voicesList]);
+  }, [isVoiceEnabled, voicesList, voiceProfile]);
 
   // Transcripts handlers
   const handleClearTranscripts = () => {
@@ -587,6 +665,76 @@ export default function TranslationStudioPage() {
     }
   };
 
+  // Session management handlers (Module 12)
+  const handleStartSession = async () => {
+    if (!streamingServiceRef.current) return;
+    try {
+      const supabase = createClient();
+      const { data: userRes } = await supabase.auth.getUser();
+      const userId = userRes?.user?.id || "usr-admin-001";
+      
+      let orgId = "org-aether-main";
+      if (userRes?.user?.id) {
+        const { data: userProfile } = await supabase
+          .from("profiles")
+          .select("organization_id")
+          .eq("id", userRes.user.id)
+          .maybeSingle();
+        if (userProfile?.organization_id) {
+          orgId = userProfile.organization_id;
+        }
+      }
+
+      setStreamingStatus("connecting");
+      const session = await streamingServiceRef.current.createSession(
+        selectedEventId,
+        orgId,
+        userId
+      );
+      setStreamingSession(session);
+      activeSessionRef.current = session;
+      setSessionState("active");
+      setIsStreamingActive(true);
+      setMessagesBroadcasted(0);
+      sequenceNumberRef.current = 0;
+    } catch (err) {
+      console.error("Failed to start session:", err);
+      alert("Failed to start streaming session. Ensure database connection is available.");
+      setStreamingStatus("error");
+    }
+  };
+
+  const handlePauseSession = async () => {
+    if (!streamingServiceRef.current) return;
+    await streamingServiceRef.current.updateSessionState("paused");
+    setSessionState("paused");
+  };
+
+  const handleResumeSession = async () => {
+    if (!streamingServiceRef.current) return;
+    await streamingServiceRef.current.updateSessionState("active");
+    setSessionState("active");
+  };
+
+  const handleStopSession = async () => {
+    if (!streamingServiceRef.current) return;
+    if (!confirm("Are you sure you want to stop the live event stream? This will disconnect all listeners.")) return;
+    await streamingServiceRef.current.updateSessionState("stopped");
+    await streamingServiceRef.current.leaveSession();
+    setSessionState("stopped");
+    setIsStreamingActive(false);
+    setStreamingSession(null);
+    activeSessionRef.current = null;
+  };
+
+  const copyListenLink = () => {
+    if (typeof window === "undefined") return;
+    const link = `${window.location.origin}/listen/${selectedEventId}`;
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const getSessionStatus = () => {
     if (isListening || isTranslating) return "ACTIVE";
     return "IDLE";
@@ -739,7 +887,7 @@ export default function TranslationStudioPage() {
         </div>
 
         {/* Right Column: AI Status Panel */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 flex flex-col gap-6">
           <AIStatusPanel
             azureSpeechStatus={isListening ? "Connected" : "Disabled"}
             azureSpeechLatency={recognitionLatency}
@@ -761,6 +909,141 @@ export default function TranslationStudioPage() {
             voiceQueueCount={voiceQueueCount}
             averageSpeechLatency={averageSpeechLatency}
           />
+
+          {/* Operator Live Session Card (Module 12) */}
+          <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-5 space-y-4 shadow-inner relative overflow-hidden">
+            <div className="absolute top-0 right-0 h-24 w-24 bg-electric-blue/5 rounded-full blur-2xl pointer-events-none" />
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest block">Live Stream Console</span>
+                <h3 className="text-sm font-bold tracking-tight text-white mt-0.5">Audience Portal</h3>
+              </div>
+              <div className={`h-2.5 w-2.5 rounded-full ${
+                isStreamingActive && streamingStatus === "connected"
+                  ? "bg-emerald-500 shadow-[0_0_8px_#10b981]"
+                  : isStreamingActive
+                  ? "bg-amber-500 animate-pulse"
+                  : "bg-zinc-700"
+              }`} />
+            </div>
+
+            <div className="space-y-3.5 border-t border-white/[0.04] pt-3.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500 text-[11px]">Session ID</span>
+                <span className="font-mono text-[10px] text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-white/[0.04] max-w-[120px] truncate">
+                  {streamingSession?.id || "None Active"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500 text-[11px]">Stream Status</span>
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                  sessionState === "active" ? "text-emerald-400" : sessionState === "paused" ? "text-amber-400" : "text-zinc-500"
+                }`}>
+                  {sessionState || "inactive"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500 text-[11px]">Listeners Connected</span>
+                <div className="flex items-center gap-1.5 text-electric-blue font-bold">
+                  <Users className="h-3.5 w-3.5" />
+                  <span>{audienceCount}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500 text-[11px]">Messages Broadcasted</span>
+                <span className="text-zinc-300 font-bold">{messagesBroadcasted}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500 text-[11px]">Transport Layer</span>
+                <span className="text-zinc-400 font-mono text-[10px]">Supabase Realtime</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500 text-[11px]">Reconnect Status</span>
+                <span className="text-zinc-400 text-[10px] uppercase font-bold">{streamingStatus}</span>
+              </div>
+            </div>
+
+            {isStreamingActive && (
+              <div className="border-t border-white/[0.04] pt-4 space-y-3">
+                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block text-center">Scan to Join Broadcast</span>
+                <div className="p-2.5 rounded bg-zinc-950 border border-white/[0.04] flex flex-col items-center">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&color=00d4ff&bgcolor=09090b&data=${encodeURIComponent(
+                      typeof window !== "undefined" ? `${window.location.origin}/listen/${selectedEventId}` : ""
+                    )}`}
+                    alt="Audience QR Code"
+                    className="h-28 w-28 border border-white/[0.08] rounded p-1 bg-zinc-950"
+                  />
+                  <div className="flex items-center gap-2 mt-3 w-full">
+                    <button
+                      onClick={copyListenLink}
+                      className="flex-1 h-8 rounded border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 text-[11px] font-bold text-zinc-300 flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5 text-electric-blue" />
+                          <span>Copy Link</span>
+                        </>
+                      )}
+                    </button>
+                    <a
+                      href={`/listen/${selectedEventId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="h-8 w-8 rounded border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 flex items-center justify-center text-zinc-300 transition-all"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 text-electric-blue" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="border-t border-white/[0.04] pt-4 grid grid-cols-2 gap-2.5">
+              {!isStreamingActive ? (
+                <button
+                  onClick={handleStartSession}
+                  className="col-span-2 h-9 rounded bg-gradient-to-r from-electric-blue to-accent-purple hover:from-electric-blue/90 hover:to-accent-purple/90 text-black font-bold text-[11px] tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                  <span>START BROADCAST</span>
+                </button>
+              ) : (
+                <>
+                  {sessionState === "active" ? (
+                    <button
+                      onClick={handlePauseSession}
+                      className="h-9 rounded border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                    >
+                      <Pause className="h-3.5 w-3.5 fill-current" />
+                      <span>PAUSE</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleResumeSession}
+                      className="h-9 rounded bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                    >
+                      <Play className="h-3.5 w-3.5 fill-current" />
+                      <span>RESUME</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={handleStopSession}
+                    className="h-9 rounded bg-red-950/40 border border-red-500/20 hover:bg-red-900/30 text-red-400 font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                  >
+                    <Square className="h-3.5 w-3.5 fill-current" />
+                    <span>STOP</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

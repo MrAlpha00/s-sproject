@@ -37,7 +37,7 @@ export class SpeechSynthesisService {
     deviceId: string | null = null,
     onStart?: () => void,
     onEnd?: () => void
-  ): Promise<{ latency: number; duration: number }> {
+  ): Promise<{ latency: number; duration: number; audioData?: string }> {
     const startTime = performance.now();
 
     const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(this.token, this.region);
@@ -74,7 +74,17 @@ export class SpeechSynthesisService {
           const duration = result.audioDuration ? Math.round(result.audioDuration / 10000) : 0;
 
           if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
-            resolve({ latency, duration });
+            let audioData: string | undefined = undefined;
+            if (result.audioData) {
+              const uint8 = new Uint8Array(result.audioData);
+              let binary = "";
+              const len = uint8.byteLength;
+              for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(uint8[i]);
+              }
+              audioData = btoa(binary);
+            }
+            resolve({ latency, duration, audioData });
           } else {
             reject(new Error(`Azure speech synthesis cancelled or failed: ${result.errorDetails}`));
           }

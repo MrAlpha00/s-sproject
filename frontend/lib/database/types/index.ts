@@ -171,3 +171,6 @@ export interface AudioSetupProfile {
   createdBy?: string;
   updatedBy?: string;
 }
+
+export type { StreamingSession } from "@/types/streaming";
+

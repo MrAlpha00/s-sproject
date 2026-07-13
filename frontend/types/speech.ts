@@ -10,4 +10,5 @@ export interface SpeechMessage {
   duration: number; // in milliseconds
   status: SpeechStatus;
   timestamp: string;
+  audioData?: string;
 }
