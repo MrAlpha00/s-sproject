@@ -18,6 +18,8 @@ import { AZURE_LANGUAGES } from "@/lib/azure/constants";
 import { createClient } from "@/supabase/client";
 import { VoiceRepository } from "@/lib/database/repositories/VoiceRepository";
 import { TranslationRepository } from "@/lib/database/repositories/TranslationRepository";
+import { EventRepository } from "@/lib/database/repositories/EventRepository";
+import { SetupProfileRepository } from "@/lib/database/repositories/SetupProfileRepository";
 
 export default function TranslationStudioPage() {
   const { events } = useEvents();
@@ -280,6 +282,80 @@ export default function TranslationStudioPage() {
         }
       } catch (err) {
         console.warn("Could not query dynamic voice profiles, loading defaults:", err);
+      }
+
+      // 7. Load Event Setup configuration from sessionStorage or database
+      try {
+        if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search);
+          const configId = params.get("configId");
+          const eventId = params.get("eventId");
+
+          let configObj: any = null;
+          const supabase = createClient();
+
+          if (configId) {
+            const setupRepo = new SetupProfileRepository(supabase);
+            const profile = await setupRepo.findById(configId);
+            if (profile) {
+              configObj = {
+                id: profile.id,
+                name: profile.profileName,
+                inputDevice: profile.inputDevice,
+                outputDevice: profile.outputDevice,
+                sourceLanguage: profile.sourceLanguage,
+                targetLanguages: profile.targetLanguages,
+                voiceSelection: profile.voiceSelection || {},
+                azureRegion: profile.azureRegion,
+                audioSettings: profile.audioSettings || {},
+              };
+            }
+          } else if (eventId) {
+            const eventRepo = new EventRepository(supabase);
+            const event = await eventRepo.findById(eventId);
+            if (event) {
+              configObj = {
+                id: event.id,
+                name: event.name,
+                inputDevice: event.inputDevice || "default",
+                outputDevice: event.outputDevice || "default",
+                sourceLanguage: event.sourceLanguage,
+                targetLanguages: event.targetLanguages,
+                voiceSelection: event.voiceProfile ? { [event.targetLanguages[0] || "en-US"]: event.voiceProfile } : {},
+                azureRegion: "centralindia",
+                audioSettings: {},
+              };
+            }
+          }
+
+          if (!configObj) {
+            const stored = sessionStorage.getItem("aethervox_setup_config");
+            if (stored) {
+              configObj = JSON.parse(stored);
+            }
+          }
+
+          if (configObj) {
+            console.log("Applying Event Setup Wizard config:", configObj);
+            if (configObj.id) setSelectedEventId(configObj.id);
+            if (configObj.inputDevice) setInputDevice(configObj.inputDevice);
+            if (configObj.outputDevice) setOutputDevice(configObj.outputDevice);
+            if (configObj.sourceLanguage) setSourceLanguage(configObj.sourceLanguage);
+            if (configObj.targetLanguages) setTargetLanguages(configObj.targetLanguages);
+            if (configObj.voiceSelection) {
+              setVoicesList((prev) => ({
+                ...prev,
+                ...configObj.voiceSelection,
+              }));
+              const firstTarget = configObj.targetLanguages?.[0];
+              if (firstTarget && configObj.voiceSelection[firstTarget]) {
+                setVoiceProfile(configObj.voiceSelection[firstTarget]);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load setup wizard configurations:", err);
       }
     }
 

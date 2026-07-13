@@ -154,3 +154,20 @@ export interface AzureSettingsMetadata {
   createdBy: string;
   updatedBy: string;
 }
+
+export interface AudioSetupProfile {
+  id: string;
+  organizationId: string;
+  profileName: string;
+  inputDevice: string;
+  outputDevice: string;
+  sourceLanguage: string;
+  targetLanguages: string[];
+  voiceSelection: Record<string, string>;
+  azureRegion: string;
+  audioSettings: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  updatedBy?: string;
+}

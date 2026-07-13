@@ -1,5 +1,5 @@
 "use client";
-
+ 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -7,6 +7,7 @@ import {
   Radio,
   Languages,
   Mic,
+  Sliders,
   Volume2,
   BarChart3,
   CreditCard,
@@ -16,7 +17,7 @@ import {
   ChevronRight,
   X,
 } from "lucide-react";
-
+ 
 export const SIDEBAR_NAV_ITEMS = [
   {
     title: "Dashboard",
@@ -28,6 +29,12 @@ export const SIDEBAR_NAV_ITEMS = [
     title: "Live Events",
     icon: Radio,
     href: "/dashboard/events",
+    allowedRoles: ["SUPER_ADMIN", "ORGANIZATION", "TEAM_MEMBER"],
+  },
+  {
+    title: "Setup Wizard",
+    icon: Sliders,
+    href: "/dashboard/setup",
     allowedRoles: ["SUPER_ADMIN", "ORGANIZATION", "TEAM_MEMBER"],
   },
   {

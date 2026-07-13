@@ -186,4 +186,27 @@ export async function translateTextAction(
   }
 }
 
+export async function getAzureLanguages() {
+  try {
+    const res = await fetch("https://api.cognitive.microsofttranslator.com/languages?api-version=3.0&scope=translation", {
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch languages from Azure: status ${res.status}`);
+    }
+    const data = await res.json();
+    return {
+      success: true,
+      languages: data.translation || {},
+    };
+  } catch (err: any) {
+    console.error("Failed to fetch languages dynamically:", err);
+    return {
+      success: false,
+      message: err.message || "Failed to fetch languages dynamically.",
+    };
+  }
+}
+
+
 

@@ -6,3 +6,4 @@ export { SessionRepository } from "./SessionRepository";
 export { AudioRepository } from "./AudioRepository";
 export { AzureSettingsRepository } from "./AzureSettingsRepository";
 export { TranslationRepository } from "./TranslationRepository";
+export { SetupProfileRepository } from "./SetupProfileRepository";
