@@ -9,3 +9,7 @@ export { TranslationRepository } from "./TranslationRepository";
 export { SetupProfileRepository } from "./SetupProfileRepository";
 export { StreamingSessionRepository } from "./StreamingSessionRepository";
 export { VoiceProfileRepository } from "./VoiceProfileRepository";
+export { AnalyticsRepository } from "./AnalyticsRepository";
+export { UsageRepository } from "./UsageRepository";
+export { EventStatisticsRepository } from "./EventStatisticsRepository";
+export { SystemHealthRepository } from "./SystemHealthRepository";
