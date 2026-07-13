@@ -54,12 +54,7 @@ export class VoiceService {
       const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(res.token, res.region);
       const synthesizer = new sdk.SpeechSynthesizer(speechConfig, null as any);
 
-      const voicesResult = await new Promise<sdk.SynthesisVoicesResult>((resolve, reject) => {
-        synthesizer.getVoicesAsync(
-          (result) => resolve(result),
-          (error) => reject(new Error(error))
-        );
-      });
+      const voicesResult = await synthesizer.getVoicesAsync("");
 
       if (voicesResult && voicesResult.voices) {
         this.cache = voicesResult.voices.map((v) => ({
