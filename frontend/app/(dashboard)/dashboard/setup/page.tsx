@@ -35,7 +35,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/supabase/client";
 import { SetupProfileRepository } from "@/lib/database/repositories/SetupProfileRepository";
 import { VoiceRepository } from "@/lib/database/repositories/VoiceRepository";
-import { AudioSetupProfile } from "@/lib/database/types";
+import { VoiceProfileRepository } from "@/lib/database/repositories/VoiceProfileRepository";
+import { AudioSetupProfile, SavedVoiceProfile } from "@/lib/database/types";
 import { AudioDevice } from "@/types/audio";
 import {
   testAzureConnection,
@@ -145,6 +146,10 @@ export default function SetupWizardPage() {
   const [clonedVoices, setClonedVoices] = useState<{ id: string; name: string }[]>([]);
   const [elevenLabsSupported, setElevenLabsSupported] = useState(false);
 
+  // Voice Profile States (Module 14)
+  const [savedVoiceProfiles, setSavedVoiceProfiles] = useState<SavedVoiceProfile[]>([]);
+  const [selectedVoiceProfileName, setSelectedVoiceProfileName] = useState<string>("custom");
+
   // Service health checks
   const [servicesStatus, setServicesStatus] = useState<Record<string, {
     status: "Connected" | "Connecting" | "Unavailable" | "Disabled";
@@ -211,6 +216,7 @@ export default function SetupWizardPage() {
     checkPermissionsSilently();
     loadLanguagesAndVoices();
     loadClonedVoices();
+    loadVoiceProfiles();
 
     // Listen to device change
     const handleDeviceChange = () => {
@@ -355,6 +361,17 @@ export default function SetupWizardPage() {
     if (profileRepoRef.current) {
       const list = await profileRepoRef.current.findAll();
       setSavedProfiles(list);
+    }
+  };
+
+  const loadVoiceProfiles = async () => {
+    try {
+      const supabase = createClient();
+      const voiceProfileRepo = new VoiceProfileRepository(supabase);
+      const list = await voiceProfileRepo.findAll();
+      setSavedVoiceProfiles(list);
+    } catch (e) {
+      console.warn("Failed loading voice profiles:", e);
     }
   };
 
@@ -1542,99 +1559,139 @@ export default function SetupWizardPage() {
               )}
 
               {/* STEP 5: VOICE CONFIGURATION */}
-              {currentStep === 4 && (
-                <div className="space-y-4">
-                  <div>
-                    <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                      <Volume2 className="h-4 w-4 text-electric-blue" />
-                      Voice Playback Configuration
-                    </h2>
-                    <p className="text-[11px] text-zinc-500 mt-1">
-                      Configure text-to-speech voice selections for each target channel. System recommends default neural voices and cloned profiles.
-                    </p>
-                  </div>
+              {currentStep === 4 && (() => {
+                const groupedVoiceProfiles: Record<string, SavedVoiceProfile[]> = {};
+                savedVoiceProfiles.forEach((p) => {
+                  if (!groupedVoiceProfiles[p.profileName]) {
+                    groupedVoiceProfiles[p.profileName] = [];
+                  }
+                  groupedVoiceProfiles[p.profileName].push(p);
+                });
+                const uniqueProfileNames = Object.keys(groupedVoiceProfiles);
 
-                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                    {targetLanguages.map((langCode) => {
-                      const langLabel = azureLanguages.find((l) => l.value === langCode)?.label || langCode;
-                      const selectedVoice = voiceSelection[langCode] || "";
-                      
-                      // Filter voices matching locale
-                      const matchingVoices = allVoices.filter(
-                        (v) => v.locale?.toLowerCase().startsWith(langCode.toLowerCase().split("-")[0])
-                      );
+                const handleApplyVoiceProfile = (profileName: string) => {
+                  setSelectedVoiceProfileName(profileName);
+                  if (profileName === "custom") return;
 
-                      return (
-                        <div key={langCode} className="rounded-lg border border-white/[0.04] bg-zinc-950/20 p-4 grid gap-4 md:grid-cols-3 items-center">
-                          <div>
-                            <span className="text-[10px] font-bold text-zinc-500 uppercase block">Language Output Channel</span>
-                            <span className="font-semibold text-xs text-white truncate block mt-0.5">{langLabel}</span>
-                          </div>
+                  const mappings = groupedVoiceProfiles[profileName] || [];
+                  const updated = { ...voiceSelection };
+                  mappings.forEach((m) => {
+                    updated[m.language] = m.voiceName;
+                  });
+                  setVoiceSelection(updated);
+                };
 
-                          <div className="md:col-span-2 grid gap-3 sm:grid-cols-2">
+                return (
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-white/[0.04] pb-4">
+                      <div>
+                        <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                          <Volume2 className="h-4 w-4 text-electric-blue" />
+                          Voice Playback Configuration
+                        </h2>
+                        <p className="text-[11px] text-zinc-500 mt-1">
+                          Configure text-to-speech voice selections for each target channel. System recommends default neural voices and cloned profiles.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap">Voice Profile:</span>
+                        <select
+                          value={selectedVoiceProfileName}
+                          onChange={(e) => handleApplyVoiceProfile(e.target.value)}
+                          className="h-8 rounded border border-white/[0.06] bg-zinc-950 px-2.5 pr-8 py-0.5 text-xs text-zinc-300 focus:outline-none focus:border-electric-blue/50"
+                        >
+                          <option value="custom">Custom (Select voices manually)</option>
+                          {uniqueProfileNames.map((name) => (
+                            <option key={name} value={name}>
+                              {name} ({groupedVoiceProfiles[name].length} lang)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                      {targetLanguages.map((langCode) => {
+                        const langLabel = azureLanguages.find((l) => l.value === langCode)?.label || langCode;
+                        const selectedVoice = voiceSelection[langCode] || "";
+                        
+                        const matchingVoices = allVoices.filter(
+                          (v) => v.locale?.toLowerCase().startsWith(langCode.toLowerCase().split("-")[0])
+                        );
+
+                        return (
+                          <div key={langCode} className="rounded-lg border border-white/[0.04] bg-zinc-950/20 p-4 grid gap-4 md:grid-cols-3 items-center">
                             <div>
-                              <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">Azure Neural Voice</span>
-                              <select
-                                value={selectedVoice.startsWith("eleven-") ? "" : selectedVoice}
-                                onChange={(e) => {
-                                  setVoiceSelection({
-                                    ...voiceSelection,
-                                    [langCode]: e.target.value,
-                                  });
-                                }}
-                                className="h-8 w-full rounded border border-white/[0.06] bg-zinc-950 px-2 py-0.5 text-xs text-zinc-300 focus:outline-none"
-                              >
-                                <option value="">Select Azure Neural Voice</option>
-                                {matchingVoices.map((v) => (
-                                  <option key={v.shortName} value={v.shortName}>
-                                    {v.localName || v.displayName} ({v.gender === 1 ? "Male" : "Female"})
-                                  </option>
-                                ))}
-                                {/* Fallback recommended voice if list empty */}
-                                {matchingVoices.length === 0 && (
-                                  <option value={RECOMMEND_VOICES[langCode] || "en-US-AvaMultilingualNeural"}>
-                                    {RECOMMEND_VOICES[langCode] || "en-US-AvaMultilingualNeural"} (Default)
-                                  </option>
-                                )}
-                              </select>
+                              <span className="text-[10px] font-bold text-zinc-500 uppercase block">Language Output Channel</span>
+                              <span className="font-semibold text-xs text-white truncate block mt-0.5">{langLabel}</span>
                             </div>
 
-                            {/* ElevenLabs Cloned Voice option */}
-                            <div>
-                              <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">ElevenLabs (High-Fi Clones)</span>
-                              <select
-                                value={selectedVoice.startsWith("eleven-") ? selectedVoice : ""}
-                                onChange={(e) => {
-                                  if (e.target.value) {
+                            <div className="md:col-span-2 grid gap-3 sm:grid-cols-2">
+                              <div>
+                                <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">Azure Neural Voice</span>
+                                <select
+                                  value={selectedVoice.startsWith("eleven-") ? "" : selectedVoice}
+                                  onChange={(e) => {
                                     setVoiceSelection({
                                       ...voiceSelection,
                                       [langCode]: e.target.value,
                                     });
-                                  }
-                                }}
-                                className="h-8 w-full rounded border border-white/[0.06] bg-zinc-950 px-2 py-0.5 text-xs text-zinc-300 focus:outline-none focus:border-accent-purple/50"
-                              >
-                                <option value="">No Cloned Profile</option>
-                                {clonedVoices.map((v) => (
-                                  <option key={v.id} value={`eleven-${v.id}`}>
-                                    {v.name} (Cloned)
-                                  </option>
-                                ))}
-                              </select>
+                                    setSelectedVoiceProfileName("custom");
+                                  }}
+                                  className="h-8 w-full rounded border border-white/[0.06] bg-zinc-950 px-2 py-0.5 text-xs text-zinc-300 focus:outline-none"
+                                >
+                                  <option value="">Select Azure Neural Voice</option>
+                                  {matchingVoices.map((v) => (
+                                    <option key={v.shortName} value={v.shortName}>
+                                      {v.localName || v.displayName} ({v.gender === 1 ? "Male" : "Female"})
+                                    </option>
+                                  ))}
+                                  {matchingVoices.length === 0 && (
+                                    <option value={RECOMMEND_VOICES[langCode] || "en-US-AvaMultilingualNeural"}>
+                                      {RECOMMEND_VOICES[langCode] || "en-US-AvaMultilingualNeural"} (Default)
+                                    </option>
+                                  )}
+                                </select>
+                              </div>
+
+                              <div>
+                                <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">ElevenLabs (High-Fi Clones)</span>
+                                <select
+                                  value={selectedVoice.startsWith("eleven-") ? selectedVoice : ""}
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      setVoiceSelection({
+                                        ...voiceSelection,
+                                        [langCode]: e.target.value,
+                                      });
+                                      setSelectedVoiceProfileName("custom");
+                                    }
+                                  }}
+                                  className="h-8 w-full rounded border border-white/[0.06] bg-zinc-950 px-2 py-0.5 text-xs text-zinc-300 focus:outline-none focus:border-accent-purple/50"
+                                >
+                                  <option value="">No Cloned Profile</option>
+                                  {clonedVoices.map((v) => (
+                                    <option key={v.id} value={`eleven-${v.id}`}>
+                                      {v.name} (Cloned)
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
 
-                    {targetLanguages.length === 0 && (
-                      <div className="rounded-lg border border-dashed border-white/[0.04] p-8 text-center text-zinc-500 text-xs">
-                        No target languages selected in Step 4. Select languages to configure voice profiles.
-                      </div>
-                    )}
+                      {targetLanguages.length === 0 && (
+                        <div className="rounded-lg border border-dashed border-white/[0.04] p-8 text-center text-zinc-500 text-xs">
+                          No target languages selected in Step 4. Select languages to configure voice profiles.
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* STEP 6: SYSTEM DIAGNOSTICS */}
               {currentStep === 5 && (

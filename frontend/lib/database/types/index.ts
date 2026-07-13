@@ -174,3 +174,19 @@ export interface AudioSetupProfile {
 
 export type { StreamingSession } from "@/types/streaming";
 
+export interface SavedVoiceProfile {
+  id: string;
+  organizationId: string;
+  profileName: string;
+  provider: string;
+  language: string;
+  voiceName: string;
+  gender: string;
+  style: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  updatedBy?: string;
+}
+

@@ -17,6 +17,7 @@ import { TranslationMessage } from "@/types/translation";
 import { AZURE_LANGUAGES } from "@/lib/azure/constants";
 import { createClient } from "@/supabase/client";
 import { VoiceRepository } from "@/lib/database/repositories/VoiceRepository";
+import { VoiceProfileRepository } from "@/lib/database/repositories/VoiceProfileRepository";
 import { TranslationRepository } from "@/lib/database/repositories/TranslationRepository";
 import { EventRepository } from "@/lib/database/repositories/EventRepository";
 import { SetupProfileRepository } from "@/lib/database/repositories/SetupProfileRepository";
@@ -333,17 +334,35 @@ export default function TranslationStudioPage() {
         console.warn("Hardware enumeration failed/denied:", err);
       }
 
-      // 6. Load voices from db voice profiles list
+      // 6. Load Operator Voice Profiles from db
       try {
         const supabase = createClient();
-        const voiceRepo = new VoiceRepository(supabase);
-        const voices = await voiceRepo.findAll();
-        if (voices && voices.length > 0) {
-          setVoiceProfilesPool(voices.map((v) => v.name));
-          setVoiceProfile(voices[0].name);
+        const voiceProfileRepo = new VoiceProfileRepository(supabase);
+        const vProfiles = await voiceProfileRepo.findAll();
+        const names = Array.from(new Set(vProfiles.map((p) => p.profileName)));
+        if (names.length > 0) {
+          setVoiceProfilesPool(names);
+          const def = vProfiles.find((p) => p.isDefault) || vProfiles[0];
+          setVoiceProfile(def.profileName);
+          
+          const defaultMappings = vProfiles.filter((p) => p.profileName === def.profileName);
+          setVoicesList((prev) => {
+            const updated = { ...prev };
+            defaultMappings.forEach((m) => {
+              updated[m.language] = m.voiceName;
+            });
+            return updated;
+          });
+        } else {
+          const voiceRepo = new VoiceRepository(supabase);
+          const voices = await voiceRepo.findAll();
+          if (voices && voices.length > 0) {
+            setVoiceProfilesPool(voices.map((v) => v.name));
+            setVoiceProfile(voices[0].name);
+          }
         }
       } catch (err) {
-        console.warn("Could not query dynamic voice profiles, loading defaults:", err);
+        console.warn("Could not query voice profiles:", err);
       }
 
       // 7. Load Event Setup configuration from sessionStorage or database
@@ -760,6 +779,35 @@ export default function TranslationStudioPage() {
 
   const hasFailedTranslations = transcripts.some((m) => m.status === "Failed");
 
+  const handleVoiceProfileChange = async (newProfileName: string) => {
+    setVoiceProfile(newProfileName);
+
+    try {
+      const supabase = createClient();
+      const voiceProfileRepo = new VoiceProfileRepository(supabase);
+      const allProfiles = await voiceProfileRepo.findAll();
+      const mappings = allProfiles.filter((p) => p.profileName === newProfileName);
+
+      if (mappings.length > 0) {
+        setVoicesList((prev) => {
+          const updated = { ...prev };
+          mappings.forEach((m) => {
+            updated[m.language] = m.voiceName;
+          });
+          return updated;
+        });
+
+        const firstTarget = targetLanguages[0];
+        const matchMapping = mappings.find((m) => m.language === firstTarget);
+        if (matchMapping) {
+          setCurrentVoice(matchMapping.voiceName);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to apply selected voice profile:", e);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Workspace Header */}
@@ -777,7 +825,7 @@ export default function TranslationStudioPage() {
             targetLanguages={targetLanguages}
             setTargetLanguages={setTargetLanguages}
             voiceProfile={voiceProfile}
-            setVoiceProfile={setVoiceProfile}
+            setVoiceProfile={handleVoiceProfileChange}
             translationModel={translationModel}
             setTranslationModel={setTranslationModel}
             latencyMode={latencyMode}

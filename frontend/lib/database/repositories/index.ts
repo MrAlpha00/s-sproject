@@ -8,3 +8,4 @@ export { AzureSettingsRepository } from "./AzureSettingsRepository";
 export { TranslationRepository } from "./TranslationRepository";
 export { SetupProfileRepository } from "./SetupProfileRepository";
 export { StreamingSessionRepository } from "./StreamingSessionRepository";
+export { VoiceProfileRepository } from "./VoiceProfileRepository";
