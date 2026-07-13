@@ -1,0 +1,5 @@
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS logo_url TEXT;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS owner_id UUID;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS subscription_id UUID;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'UTC' NOT NULL;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS default_language TEXT DEFAULT 'en-US' NOT NULL;

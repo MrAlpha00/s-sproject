@@ -17,3 +17,6 @@ export { SubscriptionPlanRepository } from "./SubscriptionPlanRepository";
 export { SubscriptionRepository } from "./SubscriptionRepository";
 export { UsageLimitRepository } from "./UsageLimitRepository";
 export { InvoiceRepository } from "./InvoiceRepository";
+export { TeamRepository } from "./TeamRepository";
+export { InvitationRepository } from "./InvitationRepository";
+export { ActivityLogRepository } from "./ActivityLogRepository";

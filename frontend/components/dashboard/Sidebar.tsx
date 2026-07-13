@@ -1,5 +1,6 @@
 "use client";
  
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -90,6 +91,35 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, setCollapsed, mobileOpen = false, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
+  const [role, setRole] = useState<string>("OWNER");
+
+  useEffect(() => {
+    async function loadRole() {
+      try {
+        const { PermissionService } = await import("@/lib/rbac/PermissionService");
+        const rbac = new PermissionService();
+        const res = await rbac.resolveUserRole("usr-owner-01", "org-aether-main");
+        setRole(res);
+      } catch (e) {}
+    }
+    loadRole();
+  }, []);
+
+  const isItemAllowed = (href: string, userRole: string): boolean => {
+    if (href === "/dashboard/team") {
+      return userRole === "OWNER" || userRole === "ADMIN";
+    }
+    if (href === "/dashboard/billing") {
+      return userRole === "OWNER" || userRole === "ADMIN";
+    }
+    if (href === "/dashboard/analytics") {
+      return userRole === "OWNER" || userRole === "ADMIN" || userRole === "EVENT_MANAGER";
+    }
+    if (href === "/dashboard/setup") {
+      return userRole === "OWNER" || userRole === "ADMIN" || userRole === "EVENT_MANAGER" || userRole === "OPERATOR";
+    }
+    return true;
+  };
 
   const handleLinkClick = () => {
     if (onCloseMobile) {
@@ -146,6 +176,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen = false, onCloseMo
         {/* Navigation Items */}
         <nav className="space-y-1 px-2 py-4">
           {SIDEBAR_NAV_ITEMS.map((item) => {
+            if (!isItemAllowed(item.href, role)) return null;
             const Icon = item.icon;
             const isActive =
               item.href === "/dashboard"
