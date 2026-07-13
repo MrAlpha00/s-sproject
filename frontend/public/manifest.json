@@ -1,0 +1,17 @@
+{
+  "short_name": "AetherVOX",
+  "name": "AetherVOX Live Translation & Routing Studio",
+  "description": "Professional audio routing, synthetic voice mapping, and multi-tenant live translations stream delivery platform.",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": "/dashboard",
+  "background_color": "#09090b",
+  "theme_color": "#00d4ff",
+  "display": "standalone",
+  "orientation": "portrait"
+}

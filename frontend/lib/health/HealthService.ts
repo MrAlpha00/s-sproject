@@ -23,11 +23,16 @@ const startTime = Date.now();
 export class HealthService {
   static async check(): Promise<HealthReport> {
     const supabase = createClient();
-    const services = {
-      supabase: "Connected" as const,
-      azureSpeech: "Connected" as const,
-      azureTranslator: "Connected" as const,
-      database: "Connected" as const,
+    const services: {
+      supabase: "Connected" | "Disconnected";
+      azureSpeech: "Connected" | "Disconnected";
+      azureTranslator: "Connected" | "Disconnected";
+      database: "Connected" | "Disconnected";
+    } = {
+      supabase: "Connected",
+      azureSpeech: "Connected",
+      azureTranslator: "Connected",
+      database: "Connected",
     };
 
     // 1. Supabase Check

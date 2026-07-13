@@ -14,6 +14,7 @@ export const metadata: Metadata = {
   title: "AetherVOX | Real-Time AI Speech Translation & Enterprise Voice Synthesis",
   description:
     "Instantly translate live speeches, conferences, and broadcasts into 50+ languages with sub-second latency, neural voice cloning, and scalable event infrastructure.",
+  manifest: "/manifest.json",
   keywords: [
     "AI translation",
     "real-time translation",
