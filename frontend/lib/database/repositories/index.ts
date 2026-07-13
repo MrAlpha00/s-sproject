@@ -13,3 +13,7 @@ export { AnalyticsRepository } from "./AnalyticsRepository";
 export { UsageRepository } from "./UsageRepository";
 export { EventStatisticsRepository } from "./EventStatisticsRepository";
 export { SystemHealthRepository } from "./SystemHealthRepository";
+export { SubscriptionPlanRepository } from "./SubscriptionPlanRepository";
+export { SubscriptionRepository } from "./SubscriptionRepository";
+export { UsageLimitRepository } from "./UsageLimitRepository";
+export { InvoiceRepository } from "./InvoiceRepository";

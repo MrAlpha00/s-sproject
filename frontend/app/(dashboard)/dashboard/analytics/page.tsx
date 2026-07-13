@@ -42,6 +42,8 @@ import {
 import { AnalyticsService } from "@/lib/analytics/AnalyticsService";
 import { AZURE_LANGUAGES } from "@/lib/azure/constants";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
+import { FeatureGate } from "@/lib/utils/featureGate";
 
 export default function AnalyticsPage() {
   const [supabase] = useState(() => createClient());
@@ -50,12 +52,15 @@ export default function AnalyticsPage() {
   const [usageRepo] = useState(() => new UsageRepository(supabase));
   const [eventRepo] = useState(() => new EventStatisticsRepository(supabase));
   const [healthRepo] = useState(() => new SystemHealthRepository(supabase));
+  const [featureGate] = useState(() => new FeatureGate());
 
   // Date Range Filters
   const [filterRange, setFilterRange] = useState<"today" | "yesterday" | "7days" | "30days">("7days");
   
   // States
   const [metrics, setMetrics] = useState<MessageMetrics | null>(null);
+  const [gateAllowed, setGateAllowed] = useState(true);
+  const [gateReason, setGateReason] = useState("");
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [eventHistory, setEventHistory] = useState<EventStat[]>([]);
   const [health, setHealth] = useState<SystemHealthReport | null>(null);
@@ -80,6 +85,12 @@ export default function AnalyticsPage() {
       try {
         setLoading(true);
         const orgId = "org-aether-main";
+
+        const gate = await featureGate.canAccessAnalytics(orgId);
+        if (!gate.allowed) {
+          setGateAllowed(false);
+          setGateReason(gate.reason || "Access Denied");
+        }
 
         const msgMetrics = await analyticsRepo.getAggregateMetrics(orgId);
         setMetrics(msgMetrics);
@@ -245,6 +256,30 @@ export default function AnalyticsPage() {
     if (status === "Connected") return "text-emerald-400 border-emerald-500/20 bg-emerald-500/5";
     return "text-red-400 border-red-500/20 bg-red-500/5";
   };
+
+  if (!gateAllowed) {
+    return (
+      <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-8 text-center max-w-xl mx-auto my-12 space-y-6">
+        <div className="mx-auto w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+          <AlertOctagon className="h-6 w-6" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-lg font-bold text-white">Enterprise Analytics Locked</h2>
+          <p className="text-xs text-zinc-500 max-w-sm mx-auto leading-relaxed">
+            {gateReason}
+          </p>
+        </div>
+        <div className="pt-2">
+          <Link
+            href="/dashboard/billing/plans"
+            className="inline-flex h-9 items-center justify-center rounded-lg bg-electric-blue text-black font-bold text-xs px-6 hover:bg-electric-blue/90 cursor-pointer transition-colors"
+          >
+            UPGRADE SUBSCRIPTION PLAN
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 text-white max-w-7xl mx-auto selection:bg-electric-blue/30 selection:text-white">
