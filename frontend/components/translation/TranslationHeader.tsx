@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Clock, Users, Zap, Volume2, Globe, Radio } from "lucide-react";
+import { Activity, Clock, Users, Zap, Volume2, Globe, Radio, Mic } from "lucide-react";
 
 interface TranslationHeaderProps {
   sessionName: string;
