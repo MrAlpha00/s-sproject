@@ -205,7 +205,7 @@ export function SessionControls({
         }`}
         title="Toggle Live Captions"
       >
-        <Cc className="h-4 w-4" />
+        <Subtitles className="h-4 w-4" />
         <span>CAPTIONS</span>
       </button>
 
