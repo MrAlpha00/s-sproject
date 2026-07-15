@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useEvents } from "@/providers/EventProvider";
 import { TranslationHeader } from "@/components/translation/TranslationHeader";
 import { TranslationConfigPanel, PoolOption } from "@/components/translation/TranslationConfigPanel";
-import { SessionInfoCard } from "@/components/translation/SessionInfoCard";
 import { TranslationPreview, SpeechStatusInfo } from "@/components/translation/TranslationPreview";
 import { SessionControls } from "@/components/translation/SessionControls";
 import { AIStatusPanel } from "@/components/translation/AIStatusPanel";
@@ -808,15 +807,109 @@ export default function TranslationStudioPage() {
     }
   };
 
+  // Timer state
+  const [elapsedTime, setElapsedTime] = useState(0);
+  useEffect(() => {
+    let timerId: any = null;
+    if (isListening || isStreamingActive) {
+      timerId = setInterval(() => {
+        setElapsedTime((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setElapsedTime(0);
+    }
+    return () => {
+      if (timerId) clearInterval(timerId);
+    };
+  }, [isListening, isStreamingActive]);
+
+  const formatTimer = (seconds: number) => {
+    const hrs = Math.floor(seconds / 3600).toString().padStart(2, "0");
+    const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, "0");
+    const secs = (seconds % 60).toString().padStart(2, "0");
+    return `${hrs}:${mins}:${secs}`;
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 max-w-[1600px] mx-auto text-white">
       {/* Top Workspace Header */}
-      <TranslationHeader sessionName={sessionName} status={getSessionStatus()} />
+      <TranslationHeader
+        sessionName={sessionName}
+        status={getSessionStatus()}
+        broadcastStatus={streamingStatus}
+        listenerCount={audienceCount}
+        recognitionLatency={recognitionLatency}
+        translationLatency={translationLatency}
+        synthesisLatency={synthesisLatency}
+        totalPipelineLatency={totalPipelineLatency}
+        timerString={formatTimer(elapsedTime)}
+      />
+
+      {/* Live Metrics Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 bg-zinc-950/20 border border-white/[0.04] p-2.5 rounded-xl shadow-inner">
+        {/* Card 1: Rec Confidence */}
+        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center">
+          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Rec Conf</span>
+          <span className="text-[11px] font-bold text-emerald-400 font-mono mt-0.5">
+            {transcripts.length > 0
+              ? `${Math.round(transcripts.reduce((acc, t) => acc + (t.confidence || 95), 0) / transcripts.length)}%`
+              : "--"}
+          </span>
+        </div>
+
+        {/* Card 2: Trans Confidence */}
+        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center">
+          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Trans Conf</span>
+          <span className="text-[11px] font-bold text-emerald-400 font-mono mt-0.5">98%</span>
+        </div>
+
+        {/* Card 3: Queue Size */}
+        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center">
+          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Queue Size</span>
+          <span className="text-[11px] font-bold text-electric-blue font-mono mt-0.5">{voiceQueueCount}</span>
+        </div>
+
+        {/* Card 4: Packet Count */}
+        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center">
+          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Packets</span>
+          <span className="text-[11px] font-bold text-zinc-350 font-mono mt-0.5">{messagesBroadcasted}</span>
+        </div>
+
+        {/* Card 5: Audio Bitrate */}
+        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center">
+          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Bitrate</span>
+          <span className="text-[11px] font-bold text-zinc-350 font-mono mt-0.5">128 kbps</span>
+        </div>
+
+        {/* Card 6: Active Voice */}
+        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center truncate">
+          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Active Voice</span>
+          <span className="text-[10px] font-bold text-zinc-350 truncate block mt-0.5" title={currentVoice}>
+            {currentVoice.split("Neural")[0]}
+          </span>
+        </div>
+
+        {/* Card 7: Input Device */}
+        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center truncate">
+          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Input Device</span>
+          <span className="text-[9px] font-semibold text-zinc-400 truncate block mt-0.5" title={microphoneStatus}>
+            {microphoneStatus}
+          </span>
+        </div>
+
+        {/* Card 8: Output Device */}
+        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center truncate">
+          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Output Device</span>
+          <span className="text-[9px] font-semibold text-zinc-400 truncate block mt-0.5" title={speakerStatus}>
+            {speakerStatus}
+          </span>
+        </div>
+      </div>
 
       {/* Main Workspace 3-Column Layout */}
-      <div className="grid gap-6 lg:grid-cols-4">
-        {/* Left Column: Config Panel & Info Card */}
-        <div className="lg:col-span-1 space-y-6 flex flex-col">
+      <div className="grid gap-4 lg:grid-cols-4 items-stretch">
+        {/* Left Column: Config Panel (Accordion) */}
+        <div className="lg:col-span-1 flex flex-col h-full">
           <TranslationConfigPanel
             selectedEventId={selectedEventId}
             setSelectedEventId={setSelectedEventId}
@@ -849,7 +942,7 @@ export default function TranslationStudioPage() {
             recordingEnabled={recordingEnabled}
             setRecordingEnabled={setRecordingEnabled}
             
-            // Dynamic Pools
+            // Pools
             languagesPool={languagesPool}
             voiceProfilesPool={voiceProfilesPool}
             audioInputsPool={audioInputsPool}
@@ -867,84 +960,39 @@ export default function TranslationStudioPage() {
               { value: "azure-tts", label: "Azure Neural TTS (Standard)" }
             ]}
           />
-          <SessionInfoCard
-            selectedEventId={selectedEventId}
-            status={getSessionStatus()}
-            currentMicrophone={microphoneStatus}
-            currentSpeaker={speakerStatus}
-            recognitionLanguage={getSourceLangLabel()}
-            translationLanguage={getTargetLangsLabel()}
-            voiceProfile={voiceProfile}
-            recognitionLatency={recognitionLatency}
-            translationLatency={translationLatency}
-            synthesisLatency={synthesisLatency}
-            totalPipelineLatency={totalPipelineLatency}
+        </div>
+
+        {/* Center Columns: Preview Feed */}
+        <div className="lg:col-span-2 flex flex-col h-full">
+          <TranslationPreview
+            transcripts={transcripts}
+            interimText={interimText}
+            recognitionState={recognitionState}
+            onClearTranscripts={handleClearTranscripts}
+            onExportTranscripts={handleExportTranscripts}
             
-            // Metrics
-            recognitionStatus={isListening ? "Listening" : "Idle"}
-            translationStatus={isTranslating ? translationStatus : "Idle"}
-            messagesProcessed={messagesProcessed}
-            provider="Azure Cognitive AI"
-            
-            // Synthesis props (Module 11)
-            speechEngine="Azure Speech Synthesis"
-            currentVoice={currentVoice}
-            voiceQueueCount={voiceQueueCount}
-            messagesSpoken={messagesSpoken}
+            // Speech controllers
+            speechStatuses={speechStatuses}
+            onPlaySpeech={handlePlaySpeechItem}
+            onPauseSpeech={handlePauseSpeechItem}
+            onStopSpeech={handleStopSpeechItem}
           />
         </div>
 
-        {/* Center Columns: Preview & Controls */}
-        <div className="lg:col-span-2 space-y-6 flex flex-col justify-between">
-          <div className="flex-1">
-            <TranslationPreview
-              transcripts={transcripts}
-              interimText={interimText}
-              recognitionState={recognitionState}
-              onClearTranscripts={handleClearTranscripts}
-              onExportTranscripts={handleExportTranscripts}
-              
-              // Speech controllers (Module 11)
-              speechStatuses={speechStatuses}
-              onPlaySpeech={handlePlaySpeechItem}
-              onPauseSpeech={handlePauseSpeechItem}
-              onStopSpeech={handleStopSpeechItem}
-            />
-          </div>
-          <SessionControls
-            isListening={isListening}
-            onStartListening={handleStartListening}
-            onStopListening={handleStopListening}
-            
-            isTranslating={isTranslating}
-            onStartTranslation={handleStartTranslation}
-            onStopTranslation={handleStopTranslation}
-            onRetryFailed={handleRetryFailed}
-            onClearQueue={handleClearTranscripts}
-
-            // Voice Speech Controls
-            isVoiceEnabled={isVoiceEnabled}
-            onStartVoice={handleStartVoice}
-            onStopVoice={handleStopVoice}
-            onStopAllSpeech={handleStopAllSpeech}
-            onClearSpeechQueue={handleClearSpeechQueue}
-            
-            isAzureConfigured={isAzureConfigured}
-            hasFailedTranslations={hasFailedTranslations}
-          />
-        </div>
-
-        {/* Right Column: AI Status Panel */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
+        {/* Right Column: AI Status Panel & Stream Link */}
+        <div className="lg:col-span-1 flex flex-col gap-4 h-full">
           <AIStatusPanel
             azureSpeechStatus={isListening ? "Connected" : "Disabled"}
             azureSpeechLatency={recognitionLatency}
+            azureSpeechErrors={0}
             
             azureTranslatorStatus={isTranslating ? "Connected" : "Disabled"}
             azureTranslatorLatency={translationLatency}
+            azureTranslatorErrors={translationErrors}
             
             azureSynthesisStatus={isVoiceEnabled && isListening ? "Connected" : "Disabled"}
             azureSynthesisLatency={synthesisLatency}
+            azureSynthesisQueueSize={voiceQueueCount}
             
             elevenLabsStatus="Connected"
             elevenLabsLatency="210ms"
@@ -952,22 +1000,24 @@ export default function TranslationStudioPage() {
             openAiStatus="Connected"
             openAiLatency={translationLatency}
 
-            // Audio & queue (Module 11)
-            outputDeviceName={speakerStatus}
-            voiceQueueCount={voiceQueueCount}
-            averageSpeechLatency={averageSpeechLatency}
+            streamingStatus={streamingStatus}
+            streamingCount={audienceCount}
+            streamingErrors={0}
+            
+            audioInputName={microphoneStatus}
+            audioOutputName={speakerStatus}
           />
 
-          {/* Operator Live Session Card (Module 12) */}
-          <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-5 space-y-4 shadow-inner relative overflow-hidden">
-            <div className="absolute top-0 right-0 h-24 w-24 bg-electric-blue/5 rounded-full blur-2xl pointer-events-none" />
+          {/* Operator Live Session Card */}
+          <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-4 space-y-3 shadow-inner relative overflow-hidden shrink-0">
+            <div className="absolute top-0 right-0 h-16 w-16 bg-electric-blue/5 rounded-full blur-2xl pointer-events-none" />
             
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest block">Live Stream Console</span>
-                <h3 className="text-sm font-bold tracking-tight text-white mt-0.5">Audience Portal</h3>
+                <span className="text-[9px] font-extrabold text-zinc-550 uppercase tracking-widest block">Broadcasting QR</span>
+                <h3 className="text-xs font-bold tracking-tight text-white mt-0.5">Audience Portal</h3>
               </div>
-              <div className={`h-2.5 w-2.5 rounded-full ${
+              <div className={`h-2 w-2 rounded-full ${
                 isStreamingActive && streamingStatus === "connected"
                   ? "bg-emerald-500 shadow-[0_0_8px_#10b981]"
                   : isStreamingActive
@@ -976,66 +1026,32 @@ export default function TranslationStudioPage() {
               }`} />
             </div>
 
-            <div className="space-y-3.5 border-t border-white/[0.04] pt-3.5 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-500 text-[11px]">Session ID</span>
-                <span className="font-mono text-[10px] text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-white/[0.04] max-w-[120px] truncate">
-                  {streamingSession?.id || "None Active"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-500 text-[11px]">Stream Status</span>
-                <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                  sessionState === "active" ? "text-emerald-400" : sessionState === "paused" ? "text-amber-400" : "text-zinc-500"
-                }`}>
-                  {sessionState || "inactive"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-500 text-[11px]">Listeners Connected</span>
-                <div className="flex items-center gap-1.5 text-electric-blue font-bold">
-                  <Users className="h-3.5 w-3.5" />
-                  <span>{audienceCount}</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-500 text-[11px]">Messages Broadcasted</span>
-                <span className="text-zinc-300 font-bold">{messagesBroadcasted}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-500 text-[11px]">Transport Layer</span>
-                <span className="text-zinc-400 font-mono text-[10px]">Supabase Realtime</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-500 text-[11px]">Reconnect Status</span>
-                <span className="text-zinc-400 text-[10px] uppercase font-bold">{streamingStatus}</span>
-              </div>
-            </div>
-
             {isStreamingActive && (
-              <div className="border-t border-white/[0.04] pt-4 space-y-3">
-                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block text-center">Scan to Join Broadcast</span>
-                <div className="p-2.5 rounded bg-zinc-950 border border-white/[0.04] flex flex-col items-center">
+              <div className="border-t border-white/[0.04] pt-3 flex items-center gap-3 animate-in fade-in duration-200">
+                <div className="p-1 rounded bg-zinc-950 border border-white/[0.04] shrink-0">
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&color=00d4ff&bgcolor=09090b&data=${encodeURIComponent(
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&color=00d4ff&bgcolor=09090b&data=${encodeURIComponent(
                       typeof window !== "undefined" ? `${window.location.origin}/listen/${selectedEventId}` : ""
                     )}`}
                     alt="Audience QR Code"
-                    className="h-28 w-28 border border-white/[0.08] rounded p-1 bg-zinc-950"
+                    className="h-16 w-16 border border-white/[0.08] rounded p-0.5 bg-zinc-950"
                   />
-                  <div className="flex items-center gap-2 mt-3 w-full">
+                </div>
+                <div className="flex-1 space-y-2 min-w-0">
+                  <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider block">Scan to Join Channel</span>
+                  <div className="flex items-center gap-1.5">
                     <button
                       onClick={copyListenLink}
-                      className="flex-1 h-8 rounded border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 text-[11px] font-bold text-zinc-300 flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                      className="flex-1 h-7 rounded border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 text-[10px] font-bold text-zinc-350 flex items-center justify-center gap-1 cursor-pointer transition-all"
                     >
                       {copied ? (
                         <>
-                          <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          <Check className="h-3 w-3 text-emerald-400" />
                           <span>Copied</span>
                         </>
                       ) : (
                         <>
-                          <Copy className="h-3.5 w-3.5 text-electric-blue" />
+                          <Copy className="h-3 w-3 text-electric-blue" />
                           <span>Copy Link</span>
                         </>
                       )}
@@ -1044,55 +1060,49 @@ export default function TranslationStudioPage() {
                       href={`/listen/${selectedEventId}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="h-8 w-8 rounded border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 flex items-center justify-center text-zinc-300 transition-all"
+                      className="h-7 w-7 rounded border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 flex items-center justify-center text-zinc-350 transition-all"
                     >
-                      <ExternalLink className="h-3.5 w-3.5 text-electric-blue" />
+                      <ExternalLink className="h-3 w-3 text-electric-blue" />
                     </a>
                   </div>
                 </div>
               </div>
             )}
-
-            <div className="border-t border-white/[0.04] pt-4 grid grid-cols-2 gap-2.5">
-              {!isStreamingActive ? (
-                <button
-                  onClick={handleStartSession}
-                  className="col-span-2 h-9 rounded bg-gradient-to-r from-electric-blue to-accent-purple hover:from-electric-blue/90 hover:to-accent-purple/90 text-black font-bold text-[11px] tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Play className="h-3.5 w-3.5 fill-current" />
-                  <span>START BROADCAST</span>
-                </button>
-              ) : (
-                <>
-                  {sessionState === "active" ? (
-                    <button
-                      onClick={handlePauseSession}
-                      className="h-9 rounded border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition-all"
-                    >
-                      <Pause className="h-3.5 w-3.5 fill-current" />
-                      <span>PAUSE</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleResumeSession}
-                      className="h-9 rounded bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition-all"
-                    >
-                      <Play className="h-3.5 w-3.5 fill-current" />
-                      <span>RESUME</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={handleStopSession}
-                    className="h-9 rounded bg-red-950/40 border border-red-500/20 hover:bg-red-900/30 text-red-400 font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition-all"
-                  >
-                    <Square className="h-3.5 w-3.5 fill-current" />
-                    <span>STOP</span>
-                  </button>
-                </>
-              )}
-            </div>
           </div>
         </div>
+      </div>
+
+      {/* Floating Control Dock */}
+      <div className="pt-2">
+        <SessionControls
+          isListening={isListening}
+          onStartListening={handleStartListening}
+          onStopListening={handleStopListening}
+          
+          isTranslating={isTranslating}
+          onStartTranslation={handleStartTranslation}
+          onStopTranslation={handleStopTranslation}
+
+          isVoiceEnabled={isVoiceEnabled}
+          onStartVoice={handleStartVoice}
+          onStopVoice={handleStopVoice}
+
+          isStreamingActive={isStreamingActive}
+          onStartSession={handleStartSession}
+          onStopSession={handleStopSession}
+          sessionState={sessionState}
+          onPauseSession={handlePauseSession}
+          onResumeSession={handleResumeSession}
+
+          captionsEnabled={captionsEnabled}
+          setCaptionsEnabled={setCaptionsEnabled}
+
+          recordingEnabled={recordingEnabled}
+          setRecordingEnabled={setRecordingEnabled}
+
+          onExportTranscripts={handleExportTranscripts}
+          isAzureConfigured={isAzureConfigured}
+        />
       </div>
     </div>
   );

@@ -1,6 +1,19 @@
 "use client";
 
-import { MessageSquare, Sparkles, Trash2, Download, Check, AlertCircle, RefreshCw, Volume2, Pause, Square } from "lucide-react";
+import { useEffect, useRef } from "react";
+import {
+  MessageSquare,
+  Sparkles,
+  Trash2,
+  Download,
+  Check,
+  AlertCircle,
+  RefreshCw,
+  Volume2,
+  Pause,
+  Square,
+  VolumeX,
+} from "lucide-react";
 import { TranslationMessage } from "@/types/translation";
 
 export interface SpeechStatusInfo {
@@ -17,7 +30,7 @@ interface TranslationPreviewProps {
   onClearTranscripts: () => void;
   onExportTranscripts: () => void;
 
-  // Module 11 speech bindings
+  // Speech bindings
   speechStatuses: Record<string, SpeechStatusInfo>;
   onPlaySpeech: (text: string, lang: string, key: string) => void;
   onPauseSpeech: (key: string) => void;
@@ -35,6 +48,13 @@ export function TranslationPreview({
   onPauseSpeech,
   onStopSpeech,
 }: TranslationPreviewProps) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Smooth auto-scroll
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [transcripts, interimText]);
+
   const getConfidenceColor = (score?: number) => {
     if (!score) return "text-zinc-500 border-white/[0.06] bg-zinc-950";
     if (score >= 90) return "text-emerald-400 border-emerald-500/20 bg-emerald-500/5";
@@ -74,227 +94,221 @@ export function TranslationPreview({
   };
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-5 flex flex-col h-[400px]">
-      {/* Header Panel */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-4 shrink-0">
-        <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-          Live Translation Studio Feed
-        </h3>
-        
-        <div className="flex items-center gap-3">
-          {/* Controls Deck */}
+    <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-4 flex flex-col h-[520px] shadow-2xl relative overflow-hidden backdrop-blur-md">
+      {/* Top action bar */}
+      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-3 shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-electric-blue shadow-[0_0_8px_#00d4ff] animate-pulse" />
+          <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+            Live Feed monitor
+          </h3>
+        </div>
+
+        <div className="flex items-center gap-2">
           {transcripts.length > 0 && (
-            <div className="flex items-center gap-1.5 border-r border-white/[0.06] pr-3 mr-1">
-              {/* Export TXT */}
+            <div className="flex items-center gap-1.5 border-r border-white/[0.08] pr-2 mr-1">
               <button
                 type="button"
                 onClick={onExportTranscripts}
-                className="p-1.5 rounded bg-zinc-800 border border-white/[0.06] hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors"
-                title="Export transcript as TXT"
+                className="inline-flex h-7 items-center gap-1 rounded bg-zinc-800 border border-white/[0.06] px-2.5 text-[10px] font-bold text-zinc-300 hover:text-white transition-colors cursor-pointer"
               >
-                <Download className="h-3 w-3" />
+                <Download className="h-3.5 w-3.5" />
+                <span>Export TXT</span>
               </button>
 
-              {/* Clear */}
               <button
                 type="button"
                 onClick={onClearTranscripts}
-                className="p-1.5 rounded bg-zinc-850 border border-red-500/10 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 transition-colors"
-                title="Clear transcript feed"
+                className="inline-flex h-7 items-center gap-1 rounded bg-red-950/30 border border-red-500/20 px-2.5 text-[10px] font-bold text-red-400 hover:bg-red-950/55 transition-colors cursor-pointer"
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Clear</span>
               </button>
             </div>
           )}
 
-          {/* Connection Status Indicator */}
-          <div className="flex items-center gap-1.5">
-            <span className={`flex h-1.5 w-1.5 rounded-full ${recognitionState === "Listening" ? "bg-emerald-500 animate-pulse" : "bg-zinc-600"}`} />
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+          <div className="flex items-center gap-1.5 rounded-full bg-zinc-950 px-2.5 py-0.5 border border-white/[0.04]">
+            <span className={`h-1.5 w-1.5 rounded-full ${recognitionState === "Listening" ? "bg-emerald-500 animate-pulse" : "bg-zinc-650"}`} />
+            <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest">
               {recognitionState}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Scrolling transcripts window */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-        {transcripts.length === 0 && !interimText && (
-          <div className="h-full flex flex-col items-center justify-center text-center text-zinc-500 text-xs gap-2 py-12">
-            <MessageSquare className="h-6 w-6 text-zinc-700" />
-            <p>No translation streams active.</p>
-            <p className="text-[10px] text-zinc-650 max-w-[280px]">
-              Toggle 'Start Listening' or 'Start Translation' to stream microphone data into Azure.
-            </p>
+      {/* Scrolling Feed Container */}
+      <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 custom-scrollbar">
+        {transcripts.length === 0 && !interimText ? (
+          <div className="h-full flex flex-col items-center justify-center text-center text-zinc-500 text-xs gap-3.5 py-16">
+            <div className="h-10 w-10 rounded-full bg-white/[0.02] border border-white/[0.06] flex items-center justify-center text-zinc-650">
+              <VolumeX className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-bold text-zinc-450">Broadcast Feed Inactive</p>
+              <p className="text-[10px] text-zinc-600 max-w-[260px] mx-auto mt-1 leading-relaxed">
+                Start listening or enable the translation engine below to stream live audio.
+              </p>
+            </div>
           </div>
-        )}
-
-        {/* Finalized transcript blocks with translations */}
-        <div className="space-y-4">
-          {transcripts.map((block) => (
-            <div key={block.id} className="bg-zinc-950/30 border border-white/[0.03] rounded-xl p-4 space-y-3.5 shadow-sm">
-              
-              {/* Original sentence header & content */}
-              <div className="flex gap-2.5 items-start">
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-electric-blue/10 border border-electric-blue/20 text-electric-blue mt-0.5">
-                  <MessageSquare className="h-3.5 w-3.5" />
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white">Presenter</span>
-                      <span className="rounded bg-zinc-900 border border-white/[0.06] px-1.5 py-0.5 text-zinc-400 font-semibold font-mono text-[9px]">
-                        {block.sourceLanguage}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-zinc-500 font-semibold font-mono text-[9px]">
-                      <span>{new Date(block.timestamp).toLocaleTimeString()}</span>
-                      <span>•</span>
-                      <span>Rec: {block.recognitionLatency}ms</span>
-                      {block.confidence !== undefined && (
-                        <>
-                          <span>•</span>
-                          <span className={`inline-flex items-center gap-0.5 rounded border px-1 ${getConfidenceColor(block.confidence)}`}>
-                            <Sparkles className="h-2 w-2" />
-                            {block.confidence}%
-                          </span>
-                        </>
-                      )}
-                    </div>
+        ) : (
+          <div className="space-y-3.5">
+            {transcripts.map((block) => (
+              <div
+                key={block.id}
+                className="bg-zinc-950/40 border border-white/[0.04] rounded-xl p-4.5 space-y-4 hover:border-white/[0.08] transition-colors shadow-inner"
+              >
+                {/* Source Line */}
+                <div className="flex gap-3 items-start">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-electric-blue/10 border border-electric-blue/20 text-electric-blue text-[10px] font-bold">
+                    SRC
                   </div>
-                  <p className="text-xs text-zinc-200 mt-1.5 leading-relaxed font-semibold">
-                    {block.originalText}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[9px] font-bold uppercase tracking-wider text-zinc-550 font-mono">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-white font-bold font-sans">Presenter Speech</span>
+                        <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-zinc-400 font-semibold border border-white/[0.06]">
+                          {block.sourceLanguage}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span>{new Date(block.timestamp).toLocaleTimeString()}</span>
+                        <span>•</span>
+                        <span>Rec: {block.recognitionLatency}ms</span>
+                        {block.confidence !== undefined && (
+                          <>
+                            <span>•</span>
+                            <span className={`inline-flex items-center gap-0.5 rounded border px-1 ${getConfidenceColor(block.confidence)}`}>
+                              <Sparkles className="h-2 w-2" />
+                              {block.confidence}%
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-[12px] text-zinc-150 mt-1.5 leading-relaxed font-medium">
+                      {block.originalText}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Target Translation List */}
+                <div className="pl-9 border-l border-white/[0.04] space-y-3.5">
+                  {block.targetLanguage.map((langCode) => {
+                    const translationText = block.translatedText[langCode];
+                    const hasTranslation = !!translationText;
+                    const isTranslating = block.status === "Translating" || block.status === "Pending";
+                    const isFailed = block.status === "Failed" && !hasTranslation;
+
+                    const speechKey = `${block.id}-${langCode}`;
+                    const speechInfo = speechStatuses[speechKey] || {
+                      voice: "Matching...",
+                      status: "Pending",
+                      latency: 0,
+                      duration: 0,
+                    };
+
+                    return (
+                      <div key={langCode} className="space-y-2">
+                        <div className="flex items-center justify-between gap-3 text-[9px] font-bold uppercase tracking-wider text-zinc-550 font-mono">
+                          <div className="flex items-center gap-1.5">
+                            <span className="rounded bg-zinc-900 border border-white/[0.06] px-1.5 py-0.5 text-zinc-400">
+                              {langCode}
+                            </span>
+                            <span>➔</span>
+                            <span className="text-electric-blue font-extrabold font-sans">Translation</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span>Trans: {block.translationLatency || "--"}ms</span>
+                            <span>•</span>
+                            {getStatusIcon(isFailed ? "Failed" : isTranslating ? "Translating" : "Completed")}
+                          </div>
+                        </div>
+
+                        <p className={`text-[12px] leading-relaxed ${
+                          isFailed ? "text-red-400 italic" : isTranslating ? "text-zinc-500 italic" : "text-zinc-250 font-medium"
+                        }`}>
+                          {isFailed
+                            ? "Translation failed. Check connection."
+                            : isTranslating
+                            ? "Translating phrase..."
+                            : translationText}
+                        </p>
+
+                        {/* Speech synthesis controls */}
+                        {hasTranslation && (
+                          <div className="flex items-center justify-between gap-2.5 bg-zinc-950/60 rounded-lg p-2 border border-white/[0.02] text-[9px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
+                            <div className="flex items-center gap-2">
+                              {speechInfo.status === "Playing" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onPauseSpeech(speechKey)}
+                                  className="h-5.5 w-5.5 rounded bg-zinc-900 border border-white/[0.06] flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                >
+                                  <Pause className="h-2.5 w-2.5 fill-current" />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => onPlaySpeech(translationText, langCode, speechKey)}
+                                  className="h-5.5 w-5.5 rounded bg-electric-blue/10 border border-electric-blue/20 flex items-center justify-center text-electric-blue hover:bg-electric-blue/20 transition-colors cursor-pointer"
+                                >
+                                  <Volume2 className="h-2.5 w-2.5 fill-current" />
+                                </button>
+                              )}
+
+                              {(speechInfo.status === "Playing" || speechInfo.status === "Paused" || speechInfo.status === "Synthesizing") && (
+                                <button
+                                  type="button"
+                                  onClick={() => onStopSpeech(speechKey)}
+                                  className="h-5.5 w-5.5 rounded bg-zinc-900 border border-red-500/20 flex items-center justify-center text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+                                >
+                                  <Square className="h-2.5 w-2.5 fill-current" />
+                                </button>
+                              )}
+
+                              <span className="text-zinc-400 font-bold truncate max-w-[120px] font-sans">
+                                {speechInfo.voice.split("Neural")[0]}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span>TTS: {speechInfo.latency ? `${speechInfo.latency}ms` : "--"}</span>
+                              <span>•</span>
+                              <span>Len: {speechInfo.duration ? `${(speechInfo.duration / 1000).toFixed(1)}s` : "--"}</span>
+                              <span>•</span>
+                              <span className={`px-1 rounded border font-extrabold ${getSpeechStatusColor(speechInfo.status)}`}>
+                                {speechInfo.status}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {/* Live Interim Input */}
+            {interimText && (
+              <div className="flex gap-3 items-start bg-zinc-950/20 border border-dashed border-white/[0.06] rounded-xl p-4 animate-pulse">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-zinc-900 border border-white/[0.06] text-zinc-500 text-[10px] font-bold">
+                  LIVE
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-zinc-550 font-mono">
+                    <span>Recognizing Input Speech...</span>
+                  </div>
+                  <p className="text-[12px] text-zinc-400 mt-1.5 leading-relaxed italic font-medium">
+                    {interimText}
                   </p>
                 </div>
               </div>
-
-              {/* Nested translation results */}
-              <div className="pl-8 border-l border-white/[0.04] space-y-4">
-                {block.targetLanguage.map((langCode) => {
-                  const translationText = block.translatedText[langCode];
-                  const hasTranslation = !!translationText;
-                  const isTranslating = block.status === "Translating" || block.status === "Pending";
-                  const isFailed = block.status === "Failed" && !hasTranslation;
-
-                  // Retrieve dynamic Speech status details
-                  const speechKey = `${block.id}-${langCode}`;
-                  const speechInfo = speechStatuses[speechKey] || {
-                    voice: "Matching...",
-                    status: "Pending",
-                    latency: 0,
-                    duration: 0,
-                  };
-
-                  return (
-                    <div key={langCode} className="space-y-1.5">
-                      {/* Translation block header info */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 text-[9px] font-bold uppercase tracking-wider">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="rounded bg-zinc-900/60 border border-white/[0.04] px-1.5 py-0.2 text-zinc-400 font-mono">
-                            {langCode}
-                          </span>
-                          <span className="text-zinc-500">➔</span>
-                          <span className="rounded bg-electric-blue/5 border border-electric-blue/10 px-1 py-0.2 text-electric-blue text-[8px] font-extrabold">
-                            Azure Translator
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-zinc-500 font-mono text-[8px]">
-                          <span>Trans: {block.translationLatency || "--"}ms</span>
-                          <span>•</span>
-                          {getStatusIcon(isFailed ? "Failed" : isTranslating ? "Translating" : "Completed")}
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <p className={`text-xs leading-relaxed ${
-                        isFailed ? "text-red-400 italic" : isTranslating ? "text-zinc-500 italic" : "text-zinc-300"
-                      }`}>
-                        {isFailed 
-                          ? "Translation failed. Check connection." 
-                          : isTranslating 
-                            ? "Translating phrase..." 
-                            : translationText}
-                      </p>
-
-                      {/* Speech Synthesis controls row */}
-                      {hasTranslation && (
-                        <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-950/40 rounded-lg p-2 border border-white/[0.02] text-[9px] font-bold uppercase tracking-wider text-zinc-500">
-                          {/* Audio playback controls */}
-                          <div className="flex items-center gap-1.5">
-                            {speechInfo.status === "Playing" ? (
-                              <button
-                                type="button"
-                                onClick={() => onPauseSpeech(speechKey)}
-                                className="flex h-5.5 w-5.5 items-center justify-center rounded bg-zinc-900 border border-white/[0.06] text-zinc-400 hover:text-white transition-colors"
-                              >
-                                <Pause className="h-2.5 w-2.5" />
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => onPlaySpeech(translationText, langCode, speechKey)}
-                                className="flex h-5.5 w-5.5 items-center justify-center rounded bg-electric-blue/10 border border-electric-blue/20 text-electric-blue hover:bg-electric-blue/20 transition-colors"
-                              >
-                                <Volume2 className="h-2.5 w-2.5" />
-                              </button>
-                            )}
-
-                            {(speechInfo.status === "Playing" || speechInfo.status === "Paused" || speechInfo.status === "Synthesizing") && (
-                              <button
-                                type="button"
-                                onClick={() => onStopSpeech(speechKey)}
-                                className="flex h-5.5 w-5.5 items-center justify-center rounded bg-zinc-900 border border-red-500/20 text-zinc-400 hover:text-red-400 transition-colors"
-                              >
-                                <Square className="h-2.5 w-2.5 fill-current" />
-                              </button>
-                            )}
-                            
-                            <span className="font-mono text-zinc-400 truncate max-w-[120px]">
-                              {speechInfo.voice.split("Neural")[0]}
-                            </span>
-                          </div>
-
-                          {/* Speech metrics details */}
-                          <div className="flex items-center gap-2 font-mono text-[8px] text-zinc-650">
-                            <span>TTS: {speechInfo.latency ? `${speechInfo.latency}ms` : "--"}</span>
-                            <span>•</span>
-                            <span>Len: {speechInfo.duration ? `${(speechInfo.duration / 1000).toFixed(1)}s` : "--"}</span>
-                            <span>•</span>
-                            <span className={`px-1 rounded border uppercase font-extrabold ${getSpeechStatusColor(speechInfo.status)}`}>
-                              {speechInfo.status}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-            </div>
-          ))}
-
-          {/* Intermediate/Live Hypothesis Text */}
-          {interimText && (
-            <div className="flex gap-2.5 items-start bg-zinc-950/10 border border-dashed border-white/[0.04] rounded-lg p-3 animate-pulse">
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-zinc-900 border border-white/[0.06] text-zinc-500 mt-0.5">
-                <MessageSquare className="h-3.5 w-3.5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Live Input</span>
-                  <span className="text-[8px] text-zinc-650 font-bold uppercase">Recognizing...</span>
-                </div>
-                <p className="text-xs text-zinc-400 mt-1 leading-relaxed italic">
-                  {interimText}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
+        {/* Ref for smooth scroll */}
+        <div ref={bottomRef} />
       </div>
     </div>
   );
