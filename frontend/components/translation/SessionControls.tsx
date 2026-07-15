@@ -11,7 +11,7 @@ import {
   Square,
   Volume2,
   VolumeX,
-  Cc,
+  Subtitles,
   Disc,
   Download,
 } from "lucide-react";
