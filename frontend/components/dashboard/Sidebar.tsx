@@ -96,9 +96,14 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen = false, onCloseMo
   useEffect(() => {
     async function loadRole() {
       try {
+        const { createClient } = await import("@/supabase/client");
+        const supabase = createClient();
+        const { data: userRes } = await supabase.auth.getUser();
+        const userId = userRes?.user?.id || "usr-owner-01";
+
         const { PermissionService } = await import("@/lib/rbac/PermissionService");
         const rbac = new PermissionService();
-        const res = await rbac.resolveUserRole("usr-owner-01", "org-aether-main");
+        const res = await rbac.resolveUserRole(userId, "org-aether-main");
         setRole(res);
       } catch (e) {}
     }
