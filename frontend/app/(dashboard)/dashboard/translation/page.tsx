@@ -32,6 +32,10 @@ import {
   Square,
   RefreshCw,
   ExternalLink,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
 
 export default function TranslationStudioPage() {
