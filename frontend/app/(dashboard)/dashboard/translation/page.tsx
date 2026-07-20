@@ -63,10 +63,71 @@ export default function TranslationStudioPage() {
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
   const [recordingEnabled, setRecordingEnabled] = useState(false);
 
+  // Studio Stage Workflow
+  const [studioStage, setStudioStage] = useState<"setup" | "live">("setup");
+
+  // Restore active studio session state from sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = sessionStorage.getItem("aethervox_studio_active_session");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.selectedEventId) setSelectedEventId(parsed.selectedEventId);
+          if (parsed.sourceLanguage) setSourceLanguage(parsed.sourceLanguage);
+          if (parsed.targetLanguages && Array.isArray(parsed.targetLanguages) && parsed.targetLanguages.length > 0) {
+            setTargetLanguages(parsed.targetLanguages);
+          }
+          if (parsed.voiceProfile) setVoiceProfile(parsed.voiceProfile);
+          if (parsed.inputDevice) setInputDevice(parsed.inputDevice);
+          if (parsed.outputDevice) setOutputDevice(parsed.outputDevice);
+          if (parsed.transcripts && Array.isArray(parsed.transcripts) && parsed.transcripts.length > 0) {
+            setTranscripts(parsed.transcripts);
+          }
+          if (parsed.studioStage) setStudioStage(parsed.studioStage);
+        }
+      } catch (err) {
+        console.warn("Failed to restore studio session state:", err);
+      }
+    }
+  }, []);
+
   // Selections
   const [selectedEventId, setSelectedEventId] = useState("manual");
   const [sourceLanguage, setSourceLanguage] = useState("en-US");
   const [targetLanguages, setTargetLanguages] = useState<string[]>(["es-ES", "zh-CN"]);
+
+  // Save session state to sessionStorage when active values update
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const statePayload = {
+          studioStage,
+          selectedEventId,
+          sourceLanguage,
+          targetLanguages,
+          voiceProfile,
+          inputDevice,
+          outputDevice,
+          transcripts,
+          isStreamingActive,
+          sessionState,
+        };
+        sessionStorage.setItem("aethervox_studio_active_session", JSON.stringify(statePayload));
+      } catch (err) {}
+    }
+  }, [
+    studioStage,
+    selectedEventId,
+    sourceLanguage,
+    targetLanguages,
+    voiceProfile,
+    inputDevice,
+    outputDevice,
+    transcripts,
+    isStreamingActive,
+    sessionState,
+  ]);
   const [voiceProfile, setVoiceProfile] = useState("Standard Neutral Narrator Male");
   const [translationModel, setTranslationModel] = useState("Aether-Large-V3");
   const [latencyMode, setLatencyMode] = useState<"low-latency" | "standard" | "high-fidelity">("low-latency");
