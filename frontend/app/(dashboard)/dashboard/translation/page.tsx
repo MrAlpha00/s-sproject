@@ -66,6 +66,52 @@ export default function TranslationStudioPage() {
   // Studio Stage Workflow
   const [studioStage, setStudioStage] = useState<"setup" | "live">("setup");
 
+  // Selections
+  const [selectedEventId, setSelectedEventId] = useState("manual");
+  const [sourceLanguage, setSourceLanguage] = useState("en-US");
+  const [targetLanguages, setTargetLanguages] = useState<string[]>(["es-ES", "zh-CN"]);
+  const [voiceProfile, setVoiceProfile] = useState("Standard Neutral Narrator Male");
+  const [translationModel, setTranslationModel] = useState("Aether-Large-V3");
+  const [latencyMode, setLatencyMode] = useState<"low-latency" | "standard" | "high-fidelity">("low-latency");
+  const [profanityFilter, setProfanityFilter] = useState(true);
+  const [targetVocabulary, setTargetVocabulary] = useState("");
+  
+  const [inputDevice, setInputDevice] = useState("default");
+  const [outputDevice, setOutputDevice] = useState("default");
+
+  // Connection & session states
+  const [isAzureConfigured, setIsAzureConfigured] = useState(false);
+  const [azureToken, setAzureToken] = useState("");
+  const [azureRegion, setAzureRegion] = useState("");
+  
+  // Real-time Pipeline States
+  const [isListening, setIsListening] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+  const [transcripts, setTranscripts] = useState<TranslationMessage[]>([]);
+  const [interimText, setInterimText] = useState("");
+  const [recognitionState, setRecognitionState] = useState<SpeechState>("Idle");
+
+  // Speech status logs mapping
+  const [speechStatuses, setSpeechStatuses] = useState<Record<string, SpeechStatusInfo>>({});
+
+  // Live Streaming States
+  const streamingServiceRef = useRef<SupabaseStreamingProvider | null>(null);
+  const [isStreamingActive, setIsStreamingActive] = useState(false);
+  const [streamingSession, setStreamingSession] = useState<any>(null);
+  const [audienceCount, setAudienceCount] = useState(0);
+  const [messagesBroadcasted, setMessagesBroadcasted] = useState(0);
+  const [streamingStatus, setStreamingStatus] = useState<string>("idle");
+  const [sessionState, setSessionState] = useState<string>("idle");
+  const [copied, setCopied] = useState(false);
+  const sequenceNumberRef = useRef(0);
+  const activeSessionRef = useRef<any>(null);
+
+  const selectedEventIdRef = useRef(selectedEventId);
+  useEffect(() => {
+    selectedEventIdRef.current = selectedEventId;
+  }, [selectedEventId]);
+
   // Restore active studio session state from sessionStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -91,11 +137,6 @@ export default function TranslationStudioPage() {
       }
     }
   }, []);
-
-  // Selections
-  const [selectedEventId, setSelectedEventId] = useState("manual");
-  const [sourceLanguage, setSourceLanguage] = useState("en-US");
-  const [targetLanguages, setTargetLanguages] = useState<string[]>(["es-ES", "zh-CN"]);
 
   // Save session state to sessionStorage when active values update
   useEffect(() => {
@@ -128,47 +169,6 @@ export default function TranslationStudioPage() {
     isStreamingActive,
     sessionState,
   ]);
-  const [voiceProfile, setVoiceProfile] = useState("Standard Neutral Narrator Male");
-  const [translationModel, setTranslationModel] = useState("Aether-Large-V3");
-  const [latencyMode, setLatencyMode] = useState<"low-latency" | "standard" | "high-fidelity">("low-latency");
-  const [profanityFilter, setProfanityFilter] = useState(true);
-  const [targetVocabulary, setTargetVocabulary] = useState("");
-  
-  const [inputDevice, setInputDevice] = useState("default");
-  const [outputDevice, setOutputDevice] = useState("default");
-
-  // Connection & session states
-  const [isAzureConfigured, setIsAzureConfigured] = useState(false);
-  const [azureToken, setAzureToken] = useState("");
-  const [azureRegion, setAzureRegion] = useState("");
-  
-  // Real-time Pipeline States
-  const [isListening, setIsListening] = useState(false);
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
-  const [transcripts, setTranscripts] = useState<TranslationMessage[]>([]);
-  const [interimText, setInterimText] = useState("");
-  const [recognitionState, setRecognitionState] = useState<SpeechState>("Idle");
-
-  // Speech status logs mapping
-  const [speechStatuses, setSpeechStatuses] = useState<Record<string, SpeechStatusInfo>>({});
-
-  // Live Streaming States (Module 12)
-  const streamingServiceRef = useRef<SupabaseStreamingProvider | null>(null);
-  const [isStreamingActive, setIsStreamingActive] = useState(false);
-  const [streamingSession, setStreamingSession] = useState<any>(null);
-  const [audienceCount, setAudienceCount] = useState(0);
-  const [messagesBroadcasted, setMessagesBroadcasted] = useState(0);
-  const [streamingStatus, setStreamingStatus] = useState<string>("idle");
-  const [sessionState, setSessionState] = useState<string>("idle");
-  const [copied, setCopied] = useState(false);
-  const sequenceNumberRef = useRef(0);
-  const activeSessionRef = useRef<any>(null);
-
-  const selectedEventIdRef = useRef(selectedEventId);
-  useEffect(() => {
-    selectedEventIdRef.current = selectedEventId;
-  }, [selectedEventId]);
 
   useEffect(() => {
     const supabase = createClient();
