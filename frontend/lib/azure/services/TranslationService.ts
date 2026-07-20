@@ -61,7 +61,7 @@ export class TranslationService {
       }
       return {
         success: false,
-        message: result.message || "Translator service health check failed.",
+        message: (result as any).message || "Translator service health check failed.",
       };
     } catch (err: any) {
       return {
