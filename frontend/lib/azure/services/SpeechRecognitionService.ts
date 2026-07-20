@@ -10,6 +10,7 @@ export interface SpeechResult {
 
 export class SpeechRecognitionService {
   private recognizer: sdk.SpeechRecognizer | null = null;
+  private fallbackRecognizer: any = null;
   private token: string;
   private region: string;
   private language: string;
@@ -45,6 +46,12 @@ export class SpeechRecognitionService {
   async start(): Promise<void> {
     this.isIntentionalStop = false;
     this.onStateChange("Connecting");
+
+    // Check for mock token or fallback requirement
+    if (this.token === "mock-dev-token" && typeof window !== "undefined" && ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+      this.startWebSpeechFallback();
+      return;
+    }
 
     try {
       const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(this.token, this.region);
