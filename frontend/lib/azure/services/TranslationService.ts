@@ -25,7 +25,7 @@ export class TranslationService {
       const result = await retry(async () => {
         const res = await translateTextAction(text, from, to);
         if (!res.success) {
-          throw new Error(res.message || "Failed to translate text.");
+          throw new Error((res as any).message || "Failed to translate text.");
         }
         return res;
       }, 2); // 2 retries
