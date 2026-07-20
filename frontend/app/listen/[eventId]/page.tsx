@@ -85,23 +85,50 @@ export default function ListenPortal({ params }: { params: any }) {
           .eq("id", eventId)
           .single();
 
-        if (error) throw error;
-
-        if (event) {
+        if (event && !error) {
           setEventDetails(event);
           if (event.targetLanguages && event.targetLanguages.length > 0) {
             setSelectedLanguage(event.targetLanguages[0]);
           }
+          return;
         }
+
+        // Check local repository for event by ID
+        const { EventRepository } = await import("@/lib/database/repositories/EventRepository");
+        const repo = new EventRepository(supabase);
+        const localEvt = await repo.findById(eventId);
+        if (localEvt) {
+          setEventDetails(localEvt);
+          if (localEvt.targetLanguages && localEvt.targetLanguages.length > 0) {
+            setSelectedLanguage(localEvt.targetLanguages[0]);
+          }
+          return;
+        }
+
+        if (eventId === "evt-global-summit-2026" || eventId === "manual") {
+          setEventDetails({
+            id: eventId,
+            name: "Global AI Leadership Summit",
+            organizations: { name: "AetherVOX Enterprise" },
+            targetLanguages: ["hi-IN", "es-ES", "zh-CN"],
+          });
+          setSelectedLanguage("hi-IN");
+          return;
+        }
+
+        setEventDetails(null);
       } catch (err) {
-        console.warn("Failed to retrieve event metadata, loading mock fallbacks:", err);
-        setEventDetails({
-          id: eventId,
-          name: "Global AI Leadership Summit",
-          organizations: { name: "AetherVOX Enterprise" },
-          targetLanguages: ["hi-IN", "es-ES", "zh-CN"],
-        });
-        setSelectedLanguage("hi-IN");
+        if (eventId === "evt-global-summit-2026" || eventId === "manual") {
+          setEventDetails({
+            id: eventId,
+            name: "Global AI Leadership Summit",
+            organizations: { name: "AetherVOX Enterprise" },
+            targetLanguages: ["hi-IN", "es-ES", "zh-CN"],
+          });
+          setSelectedLanguage("hi-IN");
+        } else {
+          setEventDetails(null);
+        }
       } finally {
         setLoading(false);
       }
@@ -122,10 +149,11 @@ export default function ListenPortal({ params }: { params: any }) {
           setLatestSessionId(session.id);
           setSessionActive(true);
         } else {
-          setSessionActive(false);
+          setLatestSessionId(eventId);
+          setSessionActive(true);
         }
       } catch (e) {
-        setLatestSessionId("session-mock-active");
+        setLatestSessionId(eventId);
         setSessionActive(true);
       }
     }
@@ -281,8 +309,8 @@ export default function ListenPortal({ params }: { params: any }) {
         },
         () => {
           setSessionActive(false);
+          setBroadcastEnded(true);
           handleLeave();
-          alert("The live broadcasting session was closed by the host.");
         }
       );
 
@@ -379,6 +407,22 @@ export default function ListenPortal({ params }: { params: any }) {
     // End-to-end = network latency + buffer queue length duration
     return estimatedNetworkLatency + bufferState.bufferedDuration;
   };
+
+  if (!loading && !eventDetails) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6 text-white text-center selection:bg-electric-blue/30 selection:text-white">
+        <div className="max-w-md w-full rounded-xl border border-white/[0.06] bg-zinc-900/40 p-8 space-y-4 backdrop-blur-md shadow-2xl">
+          <div className="h-12 w-12 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+            <Radio className="h-6 w-6 animate-pulse" />
+          </div>
+          <h2 className="text-lg font-bold text-white">No Active Broadcast</h2>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            There is currently no active translation broadcast for this event link. Please verify the URL or wait for the presenter to start broadcasting.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col justify-between p-4 sm:p-6 text-white selection:bg-electric-blue/30 selection:text-white">
