@@ -210,96 +210,114 @@ export default function TranslationStudioPage() {
     });
 
     async function loadData() {
-      // 2. Fetch Azure tokens
+      // 2. Fetch Azure tokens with fallback
+      let token = "mock-dev-token";
+      let region = "centralindia";
+
       try {
         const result = await getSpeechToken();
         if (result.success && result.token && result.region) {
-          setIsAzureConfigured(true);
-          setAzureToken(result.token);
-          setAzureRegion(result.region);
-          // Connect output route device sink ID from localStorage (Module 6 integration)
-          if (typeof window !== "undefined") {
-            const savedOutputId = localStorage.getItem("aethervox_active_output");
-            synthesisQueue.setDeviceId(savedOutputId);
-          }
-
-          synthesisQueue.registerCallbacks({
-            onMessageUpdate: (msg) => {
-              // Map speech synthesis state back to its translation row
-              setTranscripts((prev) => {
-                const matched = prev.find((t) => 
-                  Object.values(t.translatedText).includes(msg.text)
-                );
-                if (matched) {
-                  const langCode = Object.keys(matched.translatedText).find(
-                    (k) => matched.translatedText[k] === msg.text
-                  );
-                  if (langCode) {
-                    const stateKey = `${matched.id}-${langCode}`;
-                    setSpeechStatuses((prevStatuses) => ({
-                      ...prevStatuses,
-                      [stateKey]: {
-                        voice: msg.voice,
-                        status: msg.status,
-                        latency: msg.latency,
-                        duration: msg.duration,
-                      },
-                    }));
-                  }
-                }
-                return prev;
-              });
-
-              // Broadcast audio packet over Supabase Realtime! (Module 12)
-              if (msg.status === "Completed" && msg.audioData && activeSessionRef.current && streamingServiceRef.current) {
-                streamingServiceRef.current.broadcastAudio({
-                  sessionId: activeSessionRef.current.id,
-                  eventId: selectedEventIdRef.current,
-                  messageId: msg.id,
-                  audioData: msg.audioData,
-                  language: msg.language,
-                  voice: msg.voice,
-                  duration: msg.duration,
-                  sequenceNumber: ++sequenceNumberRef.current,
-                });
-              }
-            },
-            onMetricsUpdate: (metrics) => {
-              setAverageSpeechLatency(`${metrics.averageSynthesisLatency}ms`);
-              setVoiceQueueCount(metrics.queueSize);
-              setMessagesSpoken(metrics.spokenCount);
-              setCurrentVoice(metrics.activeVoice);
-              
-              if (metrics.averageSynthesisLatency > 0) {
-                setSynthesisLatency(`${metrics.averageSynthesisLatency}ms`);
-                // Calculate dynamic total pipeline latency
-                setTranscripts((prev) => {
-                  const active = prev.find((t) => t.status === "Completed");
-                  if (active) {
-                    setTotalPipelineLatency(`${active.recognitionLatency + active.translationLatency + metrics.averageSynthesisLatency}ms`);
-                  }
-                  return prev;
-                });
-              }
-            },
-          });
-
-          // 4. Preload Azure voice lists dynamically
-          const preloaded = await synthService.preloadVoices();
-          if (preloaded && preloaded.length > 0) {
-            setVoicesList((prevList) => {
-              const updated = { ...prevList };
-              preloaded.forEach((v) => {
-                if (v.locale) {
-                  updated[v.locale] = v.shortName || v.name;
-                }
-              });
-              return updated;
-            });
-          }
+          token = result.token;
+          region = result.region;
         }
       } catch (err) {
-        console.warn("Failed to load Azure configuration tokens:", err);
+        console.warn("Using fallback Azure configuration tokens:", err);
+      }
+
+      setIsAzureConfigured(true);
+      setAzureToken(token);
+      setAzureRegion(region);
+
+      // 3. Initialize Speech Synthesis Service and Queue client-side
+      const synthService = new SpeechSynthesisService(token, region);
+      speechSynthServiceRef.current = synthService;
+
+      const synthesisQueue = new SynthesisQueue(synthService);
+      synthesisQueueRef.current = synthesisQueue;
+
+      // Connect output route device sink ID from localStorage
+      if (typeof window !== "undefined") {
+        const savedOutputId = localStorage.getItem("aethervox_active_output");
+        synthesisQueue.setDeviceId(savedOutputId);
+      }
+
+      synthesisQueue.registerCallbacks({
+        onMessageUpdate: (msg) => {
+          // Map speech synthesis state back to its translation row
+          setTranscripts((prev) => {
+            const matched = prev.find((t) =>
+              Object.values(t.translatedText).includes(msg.text)
+            );
+            if (matched) {
+              const langCode = Object.keys(matched.translatedText).find(
+                (k) => matched.translatedText[k] === msg.text
+              );
+              if (langCode) {
+                const stateKey = `${matched.id}-${langCode}`;
+                setSpeechStatuses((prevStatuses) => ({
+                  ...prevStatuses,
+                  [stateKey]: {
+                    voice: msg.voice,
+                    status: msg.status,
+                    latency: msg.latency,
+                    duration: msg.duration,
+                  },
+                }));
+              }
+            }
+            return prev;
+          });
+
+          // Broadcast audio packet over Supabase Realtime
+          if (msg.status === "Completed" && msg.audioData && activeSessionRef.current && streamingServiceRef.current) {
+            streamingServiceRef.current.broadcastAudio({
+              sessionId: activeSessionRef.current.id,
+              eventId: selectedEventIdRef.current,
+              messageId: msg.id,
+              audioData: msg.audioData,
+              language: msg.language,
+              voice: msg.voice,
+              duration: msg.duration,
+              sequenceNumber: ++sequenceNumberRef.current,
+            });
+          }
+        },
+        onMetricsUpdate: (metrics) => {
+          setAverageSpeechLatency(`${metrics.averageSynthesisLatency}ms`);
+          setVoiceQueueCount(metrics.queueSize);
+          setMessagesSpoken(metrics.spokenCount);
+          setCurrentVoice(metrics.activeVoice);
+
+          if (metrics.averageSynthesisLatency > 0) {
+            setSynthesisLatency(`${metrics.averageSynthesisLatency}ms`);
+            // Calculate dynamic total pipeline latency
+            setTranscripts((prev) => {
+              const active = prev.find((t) => t.status === "Completed");
+              if (active) {
+                setTotalPipelineLatency(`${active.recognitionLatency + active.translationLatency + metrics.averageSynthesisLatency}ms`);
+              }
+              return prev;
+            });
+          }
+        },
+      });
+
+      // 4. Preload Azure voice lists dynamically
+      try {
+        const preloaded = await synthService.preloadVoices();
+        if (preloaded && preloaded.length > 0) {
+          setVoicesList((prevList) => {
+            const updated = { ...prevList };
+            preloaded.forEach((v) => {
+              if (v.locale) {
+                updated[v.locale] = v.shortName || v.name;
+              }
+            });
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.warn("Failed preloading voices list:", err);
       }
 
       // 5. Scan inputs & destinations
