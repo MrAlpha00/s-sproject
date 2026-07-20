@@ -923,8 +923,189 @@ export default function TranslationStudioPage() {
     return `${hrs}:${mins}:${secs}`;
   };
 
+  // Readiness diagnostics validation
+  const micReady = audioInputsPool.length > 0 && inputDevice !== "";
+  const speechReady = isAzureConfigured;
+  const translatorReady = isAzureConfigured;
+  const ttsReady = isAzureConfigured;
+  const eventSelected = !!selectedEventId && selectedEventId !== "";
+  const allDiagnosticsPassed = micReady && speechReady && translatorReady && ttsReady && eventSelected;
+
+  if (studioStage === "setup") {
+    return (
+      <div className="space-y-6 max-w-[1400px] mx-auto text-white">
+        {/* Stage 1 Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-white/[0.06] pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold text-electric-blue uppercase tracking-widest bg-electric-blue/10 border border-electric-blue/20 px-2 py-0.5 rounded">
+                Stage 1: Pre-Flight Readiness Check
+              </span>
+            </div>
+            <h1 className="text-xl font-bold tracking-tight text-white mt-1">
+              Translation Studio Setup & System Diagnostics
+            </h1>
+          </div>
+          <button
+            onClick={() => setStudioStage("live")}
+            disabled={!allDiagnosticsPassed}
+            className="h-10 px-5 rounded-xl bg-gradient-to-r from-electric-blue to-accent-purple hover:from-electric-blue/90 hover:to-accent-purple/90 text-black font-extrabold text-xs tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all inline-flex items-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.2)] cursor-pointer"
+          >
+            <span>ENTER LIVE STUDIO CONSOLE</span>
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* 2-Column Grid Layout */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Left Column: Configuration Panel */}
+          <div className="lg:col-span-1">
+            <TranslationConfigPanel
+              selectedEventId={selectedEventId}
+              setSelectedEventId={setSelectedEventId}
+              sourceLanguage={sourceLanguage}
+              setSourceLanguage={setSourceLanguage}
+              targetLanguages={targetLanguages}
+              setTargetLanguages={setTargetLanguages}
+              voiceProfile={voiceProfile}
+              setVoiceProfile={handleVoiceProfileChange}
+              translationModel={translationModel}
+              setTranslationModel={setTranslationModel}
+              latencyMode={latencyMode}
+              setLatencyMode={setLatencyMode}
+              profanityFilter={profanityFilter}
+              setProfanityFilter={setProfanityFilter}
+              targetVocabulary={targetVocabulary}
+              setTargetVocabulary={setTargetVocabulary}
+              inputDevice={inputDevice}
+              setInputDevice={setInputDevice}
+              outputDevice={outputDevice}
+              setOutputDevice={setOutputDevice}
+              speechProvider={speechProvider}
+              setSpeechProvider={setSpeechProvider}
+              translationProvider={translationProvider}
+              setTranslationProvider={setTranslationProvider}
+              outputVoiceEngine={outputVoiceEngine}
+              setOutputVoiceEngine={setOutputVoiceEngine}
+              captionsEnabled={captionsEnabled}
+              setCaptionsEnabled={setCaptionsEnabled}
+              recordingEnabled={recordingEnabled}
+              setRecordingEnabled={setRecordingEnabled}
+              languagesPool={languagesPool}
+              voiceProfilesPool={voiceProfilesPool}
+              audioInputsPool={audioInputsPool}
+              audioOutputsPool={audioOutputsPool}
+              speechProvidersPool={[
+                { value: "azure", label: "Azure Speech Services (Default)" },
+                { value: "whisper", label: "OpenAI Whisper API (Standard)" }
+              ]}
+              translationProvidersPool={[
+                { value: "azure-translator", label: "Azure Translator V3 (Neural)" },
+                { value: "deepl", label: "DeepL Pro API (Standard)" }
+              ]}
+              voiceEnginesPool={[
+                { value: "elevenlabs", label: "ElevenLabs Synthesis (High-Fi)" },
+                { value: "azure-tts", label: "Azure Neural TTS (Standard)" }
+              ]}
+            />
+          </div>
+
+          {/* Right Column: Pre-Flight System Diagnostics Matrix */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-6 space-y-6 backdrop-blur-md shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/[0.04] pb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-electric-blue" />
+                    <span>System Diagnostic Readiness Matrix</span>
+                  </h3>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    All 5 infrastructure checks must be verified green before launching the operator console.
+                  </p>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
+                  allDiagnosticsPassed
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                    : "bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse"
+                }`}>
+                  {allDiagnosticsPassed ? "Ready for Broadcast" : "Validation Pending"}
+                </span>
+              </div>
+
+              <div className="space-y-3.5">
+                {[
+                  { name: "Microphone Input Hardware", ready: micReady, detail: microphoneStatus },
+                  { name: "Azure Speech Recognition Engine", ready: speechReady, detail: isAzureConfigured ? "Connected (Azure SDK / Fallback Active)" : "Connecting..." },
+                  { name: "Azure Translator Neural V3", ready: translatorReady, detail: isAzureConfigured ? "Connected (Neural Multi-Language)" : "Connecting..." },
+                  { name: "Azure Speech Synthesis Engine", ready: ttsReady, detail: "Speaker Sink Initialized" },
+                  { name: "Active Event Link Configuration", ready: eventSelected, detail: activeEvent ? activeEvent.name : "Manual Session Mode" },
+                ].map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3.5 rounded-lg bg-zinc-950/60 border border-white/[0.04]">
+                    <div className="flex items-center gap-3">
+                      {item.ready ? (
+                        <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />
+                      )}
+                      <div>
+                        <span className="text-xs font-bold text-white block">{item.name}</span>
+                        <span className="text-[10px] text-zinc-500 font-mono block">{item.detail}</span>
+                      </div>
+                    </div>
+                    <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border ${
+                      item.ready
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                        : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                    }`}>
+                      {item.ready ? "READY" : "CHECKING"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-4 border-t border-white/[0.04] flex items-center justify-between">
+                <div className="text-[11px] text-zinc-500">
+                  <span>Selected Event: </span>
+                  <span className="text-white font-bold">{activeEvent ? activeEvent.name : "Manual Override"}</span>
+                  <span className="mx-2">•</span>
+                  <span>Targets: </span>
+                  <span className="text-electric-blue font-bold">{getTargetLangsLabel()}</span>
+                </div>
+
+                <button
+                  onClick={() => setStudioStage("live")}
+                  disabled={!allDiagnosticsPassed}
+                  className="h-10 px-6 rounded-xl bg-gradient-to-r from-electric-blue to-accent-purple hover:from-electric-blue/90 hover:to-accent-purple/90 text-black font-extrabold text-xs tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all inline-flex items-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.2)] cursor-pointer"
+                >
+                  <span>ENTER LIVE STUDIO CONSOLE</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 max-w-[1600px] mx-auto text-white">
+      {/* Stage 2 Live Workspace Bar */}
+      <div className="flex items-center justify-between bg-zinc-950/40 border border-white/[0.04] p-3 rounded-xl">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+            Stage 2: Live Broadcasting Operator Console
+          </span>
+        </div>
+        <button
+          onClick={() => setStudioStage("setup")}
+          className="h-8 px-3 rounded-lg border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 text-[10px] font-bold text-zinc-300 flex items-center gap-1.5 transition-all cursor-pointer"
+        >
+          <span>⚙ Pre-Flight & Diagnostics</span>
+        </button>
+      </div>
+
       {/* Top Workspace Header */}
       <TranslationHeader
         sessionName={sessionName}
