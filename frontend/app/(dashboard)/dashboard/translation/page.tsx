@@ -756,12 +756,29 @@ export default function TranslationStudioPage() {
     activeSessionRef.current = null;
   };
 
-  const copyListenLink = () => {
+  const handleShareLink = async () => {
     if (typeof window === "undefined") return;
-    const link = `${window.location.origin}/listen/${selectedEventId}`;
-    navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const listenUrl = `${window.location.origin}/listen/${selectedEventId}`;
+    const shareData = {
+      title: "AetherVOX Live Broadcast",
+      text: `Join live translated audio stream for ${sessionName}`,
+      url: listenUrl,
+    };
+
+    if (typeof navigator !== "undefined" && (navigator as any).share) {
+      try {
+        await (navigator as any).share(shareData);
+        return;
+      } catch (err) {
+        // Fallback to clipboard if share modal is closed
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(listenUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {}
   };
 
   const getSessionStatus = () => {
@@ -1052,8 +1069,9 @@ export default function TranslationStudioPage() {
                   <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider block">Scan to Join Channel</span>
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={copyListenLink}
+                      onClick={handleShareLink}
                       className="flex-1 h-7 rounded border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 text-[10px] font-bold text-zinc-350 flex items-center justify-center gap-1 cursor-pointer transition-all"
+                      title="Share broadcast link (WhatsApp, Telegram, Mail, Copy)"
                     >
                       {copied ? (
                         <>
@@ -1063,7 +1081,7 @@ export default function TranslationStudioPage() {
                       ) : (
                         <>
                           <Copy className="h-3 w-3 text-electric-blue" />
-                          <span>Copy Link</span>
+                          <span>Share Link</span>
                         </>
                       )}
                     </button>

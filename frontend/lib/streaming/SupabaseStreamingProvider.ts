@@ -53,9 +53,9 @@ export class SupabaseStreamingProvider implements StreamingService {
     this.isOperator = true;
     this.notifyStatus("connecting");
     
+    let newSession: StreamingSession;
     try {
-      // 1. Create a streaming session entry in Supabase
-      const newSession = await this.repo.create({
+      newSession = await this.repo.create({
         organizationId,
         operatorId,
         eventId,
@@ -64,25 +64,38 @@ export class SupabaseStreamingProvider implements StreamingService {
         endedAt: null,
         audienceCount: 0,
       });
+    } catch (err) {
+      console.warn("Using local streaming session object fallback for event:", eventId);
+      newSession = {
+        id: `session-${eventId}`,
+        organizationId,
+        operatorId,
+        eventId,
+        status: "active",
+        startedAt: new Date().toISOString(),
+        endedAt: null,
+        audienceCount: 0,
+      };
+    }
 
-      this.activeSession = newSession;
-      this.channelName = `streaming:${newSession.id}`;
-      
-      // 2. Setup Realtime Channel
+    this.activeSession = newSession;
+    this.channelName = `streaming:${eventId}`;
+    
+    try {
+      // Setup Realtime Channel for active event
       await this.setupChannelForOperator();
-
       this.notifyStatus("connected");
       this.startHeartbeat();
       return newSession;
     } catch (err) {
       this.notifyStatus("error");
-      console.error("Failed to create streaming session:", err);
+      console.error("Failed to setup streaming channel:", err);
       throw err;
     }
   }
 
   async joinSession(
-    sessionId: string,
+    targetId: string,
     language: string,
     onMessage: (msg: BroadcastMessage) => void,
     onAudio: (audio: AudioPacketMetadata) => void,
@@ -90,11 +103,11 @@ export class SupabaseStreamingProvider implements StreamingService {
   ): Promise<void> {
     this.isOperator = false;
     this.notifyStatus("connecting");
-    this.channelName = `streaming:${sessionId}`;
-    this.joinParams = { sessionId, language, onMessage, onAudio, onSessionEnd };
+    this.channelName = targetId.startsWith("streaming:") ? targetId : `streaming:${targetId}`;
+    this.joinParams = { sessionId: targetId, language, onMessage, onAudio, onSessionEnd };
 
     try {
-      await this.setupChannelForAudience(sessionId, language, onMessage, onAudio, onSessionEnd);
+      await this.setupChannelForAudience(targetId, language, onMessage, onAudio, onSessionEnd);
       this.notifyStatus("connected");
     } catch (err) {
       this.notifyStatus("error");
