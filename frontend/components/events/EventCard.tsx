@@ -13,7 +13,9 @@ interface EventCardProps {
 }
 
 export function EventCard({ event }: EventCardProps) {
-  const { deleteEventPlaceholder, duplicateEventPlaceholder } = useEvents();
+  const { deleteEvent, duplicateEvent, deleteEventPlaceholder, duplicateEventPlaceholder } = useEvents();
+  const handleDuplicate = duplicateEvent || duplicateEventPlaceholder;
+  const handleDelete = deleteEvent || deleteEventPlaceholder;
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Format date nicely

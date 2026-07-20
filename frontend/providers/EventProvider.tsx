@@ -11,8 +11,8 @@ interface EventContextType {
   updateEvent: (id: string, eventData: Partial<TranslationEvent>) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
   duplicateEvent: (id: string) => Promise<void>;
-  deleteEventPlaceholder?: (id: string) => void;
-  duplicateEventPlaceholder?: (id: string) => void;
+  deleteEventPlaceholder: (id: string) => Promise<void> | void;
+  duplicateEventPlaceholder: (id: string) => Promise<void> | void;
 }
 
 const EventContext = createContext<EventContextType | undefined>(undefined);
