@@ -53,6 +53,7 @@ export default function ListenPortal({ params }: { params: any }) {
   const [streamingStatus, setStreamingStatus] = useState<StreamingStatus>("idle");
   const [audienceCount, setAudienceCount] = useState(0);
   const [sessionActive, setSessionActive] = useState(true);
+  const [broadcastEnded, setBroadcastEnded] = useState(false);
   const [latestSessionId, setLatestSessionId] = useState("");
 
   // Telemetry indicators
@@ -407,6 +408,22 @@ export default function ListenPortal({ params }: { params: any }) {
     // End-to-end = network latency + buffer queue length duration
     return estimatedNetworkLatency + bufferState.bufferedDuration;
   };
+
+  if (broadcastEnded) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6 text-white text-center selection:bg-electric-blue/30 selection:text-white">
+        <div className="max-w-md w-full rounded-xl border border-white/[0.06] bg-zinc-900/40 p-8 space-y-4 backdrop-blur-md shadow-2xl">
+          <div className="h-12 w-12 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center mx-auto">
+            <Radio className="h-6 w-6" />
+          </div>
+          <h2 className="text-lg font-bold text-white">Broadcast Ended</h2>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            The live translation broadcast session has ended. Thank you for listening!
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!loading && !eventDetails) {
     return (
