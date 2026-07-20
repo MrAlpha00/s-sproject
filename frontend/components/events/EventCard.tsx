@@ -117,7 +117,7 @@ export function EventCard({ event }: EventCardProps) {
                 <Edit3 className="h-3.5 w-3.5" />
               </Link>
               <button
-                onClick={() => duplicateEventPlaceholder(event.id)}
+                onClick={() => handleDuplicate(event.id)}
                 className="flex h-7 w-7 items-center justify-center rounded bg-zinc-800/40 border border-white/[0.06] text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
                 title="Duplicate Event"
               >
@@ -154,7 +154,7 @@ export function EventCard({ event }: EventCardProps) {
               <button
                 onClick={() => {
                   setShowDeleteConfirm(false);
-                  deleteEventPlaceholder(event.id);
+                  handleDelete(event.id);
                 }}
                 className="rounded-lg bg-red-500/15 border border-red-500/30 px-3.5 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition-colors"
               >
