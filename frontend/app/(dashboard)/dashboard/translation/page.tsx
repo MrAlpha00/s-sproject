@@ -217,14 +217,6 @@ export default function TranslationStudioPage() {
           setIsAzureConfigured(true);
           setAzureToken(result.token);
           setAzureRegion(result.region);
-
-          // 3. Initialize Speech Synthesis Service and Queue client-side
-          const synthService = new SpeechSynthesisService(result.token, result.region);
-          speechSynthServiceRef.current = synthService;
-
-          const synthesisQueue = new SynthesisQueue(synthService);
-          synthesisQueueRef.current = synthesisQueue;
-
           // Connect output route device sink ID from localStorage (Module 6 integration)
           if (typeof window !== "undefined") {
             const savedOutputId = localStorage.getItem("aethervox_active_output");
