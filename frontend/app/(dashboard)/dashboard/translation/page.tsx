@@ -190,7 +190,8 @@ export default function TranslationStudioPage() {
         if (msg.status === "Completed") {
           const supabase = createClient();
           const repo = new TranslationRepository(supabase);
-          repo.create("mock-session-id", "org-aether-main", msg).catch((err) => {
+          const currentSessionId = activeSessionRef.current?.id || "session-active-001";
+          repo.create(currentSessionId, "org-aether-main", msg).catch((err) => {
             console.warn("Failed to save translation history row to Supabase:", err);
           });
         }
