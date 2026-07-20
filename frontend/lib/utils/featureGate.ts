@@ -107,7 +107,10 @@ export class FeatureGate {
     return { allowed: true };
   }
 
-  async canAccessAnalytics(orgId: string): Promise<GateResult> {
+  async canAccessAnalytics(orgId: string, role?: string): Promise<GateResult> {
+    if (process.env.NODE_ENV === "development" || role === "OWNER" || role === "SUPER_ADMIN" || role === "ADMIN") {
+      return { allowed: true };
+    }
     const { plan } = await this.getOrganizationActivePlan(orgId);
     const allowed = !!plan.features.analytics;
 

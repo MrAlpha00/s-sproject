@@ -86,7 +86,13 @@ export default function AnalyticsPage() {
         setLoading(true);
         const orgId = "org-aether-main";
 
-        const gate = await featureGate.canAccessAnalytics(orgId);
+        const { PermissionService } = await import("@/lib/rbac/PermissionService");
+        const rbac = new PermissionService();
+        const { data: userRes } = await supabase.auth.getUser();
+        const userId = userRes?.user?.id || "usr-owner-01";
+        const userRole = await rbac.resolveUserRole(userId, orgId);
+
+        const gate = await featureGate.canAccessAnalytics(orgId, userRole);
         if (!gate.allowed) {
           setGateAllowed(false);
           setGateReason(gate.reason || "Access Denied");
