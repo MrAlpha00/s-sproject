@@ -60,7 +60,9 @@ export default function TeamPage() {
         setLoading(true);
         
         // 1. Resolve role of current operator
-        const resolvedRole = await permissionService.resolveUserRole(currentUserId, orgId);
+        const { data: authData } = await supabase.auth.getUser();
+        const activeUserId = authData?.user?.id || currentUserId;
+        const resolvedRole = await permissionService.resolveUserRole(activeUserId, orgId);
         setCurrentUserRole(resolvedRole);
 
         const permitted = permissionService.canManageOrganization(resolvedRole);
