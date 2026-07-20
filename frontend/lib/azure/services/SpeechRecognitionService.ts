@@ -138,16 +138,83 @@ export class SpeechRecognitionService {
           }
         );
       });
-    } catch (err: any) {
+      } catch (err: any) {
+        if (typeof window !== "undefined" && ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+          this.startWebSpeechFallback();
+          return;
+        }
+        this.onStateChange("Error");
+        this.onError(err.message || "Failed to initialize Azure Speech SDK.");
+        throw err;
+      }
+    }
+
+  private startWebSpeechFallback() {
+    try {
+      const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const rec = new SpeechRec();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = this.language;
+
+      rec.onstart = () => {
+        this.onStateChange("Listening");
+      };
+
+      rec.onresult = (event: any) => {
+        let interim = "";
+        let final = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            final += event.results[i][0].transcript;
+          } else {
+            interim += event.results[i][0].transcript;
+          }
+        }
+        if (interim) {
+          this.onResult({ text: interim, isFinal: false });
+        }
+        if (final) {
+          this.onResult({ text: final, isFinal: true, confidence: 95 });
+        }
+      };
+
+      rec.onerror = (err: any) => {
+        console.warn("Web Speech API Fallback error:", err);
+        if (err.error !== "no-speech") {
+          this.onError(err.error || "Web Speech error");
+        }
+      };
+
+      rec.onend = () => {
+        if (!this.isIntentionalStop) {
+          try { rec.start(); } catch (e) {}
+        } else {
+          this.onStateChange("Idle");
+        }
+      };
+
+      rec.start();
+      this.fallbackRecognizer = rec;
+    } catch (e: any) {
       this.onStateChange("Error");
-      this.onError(err.message || "Failed to initialize Azure Speech SDK.");
-      throw err;
+      this.onError(e.message || "Failed to start speech recognition.");
     }
   }
 
   async stop(): Promise<void> {
     this.isIntentionalStop = true;
-    if (!this.recognizer) return;
+    if (this.fallbackRecognizer) {
+      try {
+        this.fallbackRecognizer.stop();
+      } catch (e) {}
+      this.fallbackRecognizer = null;
+      this.onStateChange("Idle");
+    }
+    if (!this.recognizer) {
+      this.onStateChange("Idle");
+      return;
+    }
 
     return new Promise<void>((resolve) => {
       this.recognizer!.stopContinuousRecognitionAsync(
