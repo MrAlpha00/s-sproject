@@ -40,62 +40,106 @@ export class SpeechSynthesisService {
   ): Promise<{ latency: number; duration: number; audioData?: string }> {
     const startTime = performance.now();
 
-    const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(this.token, this.region);
-    speechConfig.speechSynthesisVoiceName = voiceName;
-    speechConfig.speechSynthesisLanguage = language;
-
-    // Initialize the speaker audio player destination
-    this.player = new sdk.SpeakerAudioDestination();
-    if (deviceId && deviceId !== "default" && !deviceId.startsWith("mock-")) {
-      try {
-        (this.player as any).setSinkId(deviceId);
-      } catch (err) {
-        console.warn("Routing audio destination device sink ID failed, using default output:", err);
-      }
+    if (this.token === "mock-dev-token") {
+      return this.speakWebSpeechFallback(text, language, onStart, onEnd, startTime);
     }
 
-    if (onStart) {
-      this.player.onAudioStart = onStart;
-    }
+    try {
+      const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(this.token, this.region);
+      speechConfig.speechSynthesisVoiceName = voiceName;
+      speechConfig.speechSynthesisLanguage = language;
 
-    if (onEnd) {
-      this.player.onAudioEnd = onEnd;
-    }
-
-    const audioConfig = sdk.AudioConfig.fromSpeakerOutput(this.player);
-    this.synthesizer = new sdk.SpeechSynthesizer(speechConfig, audioConfig);
-
-    return new Promise((resolve, reject) => {
-      this.synthesizer!.speakTextAsync(
-        text,
-        (result) => {
-          const latency = Math.round(performance.now() - startTime);
-          // Convert audio duration ticks (100ns) to milliseconds
-          const duration = result.audioDuration ? Math.round(result.audioDuration / 10000) : 0;
-
-          if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
-            let audioData: string | undefined = undefined;
-            if (result.audioData) {
-              const uint8 = new Uint8Array(result.audioData);
-              let binary = "";
-              const len = uint8.byteLength;
-              for (let i = 0; i < len; i++) {
-                binary += String.fromCharCode(uint8[i]);
-              }
-              audioData = btoa(binary);
-            }
-            resolve({ latency, duration, audioData });
-          } else {
-            reject(new Error(`Azure speech synthesis cancelled or failed: ${result.errorDetails}`));
-          }
-
-          this.cleanup();
-        },
-        (err) => {
-          this.cleanup();
-          reject(err);
+      // Initialize the speaker audio player destination
+      this.player = new sdk.SpeakerAudioDestination();
+      if (deviceId && deviceId !== "default" && !deviceId.startsWith("mock-")) {
+        try {
+          (this.player as any).setSinkId(deviceId);
+        } catch (err) {
+          console.warn("Routing audio destination device sink ID failed, using default output:", err);
         }
-      );
+      }
+
+      if (onStart) {
+        this.player.onAudioStart = onStart;
+      }
+
+      if (onEnd) {
+        this.player.onAudioEnd = onEnd;
+      }
+
+      const audioConfig = sdk.AudioConfig.fromSpeakerOutput(this.player);
+      this.synthesizer = new sdk.SpeechSynthesizer(speechConfig, audioConfig);
+
+      return await new Promise((resolve, reject) => {
+        this.synthesizer!.speakTextAsync(
+          text,
+          (result) => {
+            const latency = Math.round(performance.now() - startTime);
+            const duration = result.audioDuration ? Math.round(result.audioDuration / 10000) : 0;
+
+            if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
+              let audioData: string | undefined = undefined;
+              if (result.audioData) {
+                const uint8 = new Uint8Array(result.audioData);
+                let binary = "";
+                const len = uint8.byteLength;
+                for (let i = 0; i < len; i++) {
+                  binary += String.fromCharCode(uint8[i]);
+                }
+                audioData = btoa(binary);
+              }
+              resolve({ latency, duration, audioData });
+            } else {
+              this.speakWebSpeechFallback(text, language, onStart, onEnd, startTime).then(resolve).catch(reject);
+            }
+
+            this.cleanup();
+          },
+          (err) => {
+            this.cleanup();
+            this.speakWebSpeechFallback(text, language, onStart, onEnd, startTime).then(resolve).catch(reject);
+          }
+        );
+      });
+    } catch (err) {
+      return this.speakWebSpeechFallback(text, language, onStart, onEnd, startTime);
+    }
+  }
+
+  private speakWebSpeechFallback(
+    text: string,
+    language: string,
+    onStart?: () => void,
+    onEnd?: () => void,
+    startTime = performance.now()
+  ): Promise<{ latency: number; duration: number; audioData?: string }> {
+    return new Promise((resolve) => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = language;
+        if (onStart) utterance.onstart = onStart;
+
+        utterance.onend = () => {
+          if (onEnd) onEnd();
+          const latency = Math.round(performance.now() - startTime);
+          resolve({ latency, duration: Math.max(1000, text.length * 60) });
+        };
+
+        utterance.onerror = () => {
+          if (onEnd) onEnd();
+          const latency = Math.round(performance.now() - startTime);
+          resolve({ latency, duration: Math.max(1000, text.length * 60) });
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } else {
+        if (onStart) onStart();
+        setTimeout(() => {
+          if (onEnd) onEnd();
+          const latency = Math.round(performance.now() - startTime);
+          resolve({ latency, duration: Math.max(1000, text.length * 60) });
+        }, 800);
+      }
     });
   }
 
