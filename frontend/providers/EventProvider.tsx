@@ -9,8 +9,10 @@ interface EventContextType {
   events: TranslationEvent[];
   createEvent: (eventData: Omit<TranslationEvent, "id" | "createdAt" | "updatedAt" | "createdBy" | "updatedBy" | "organizationId" | "ownerId">) => Promise<void>;
   updateEvent: (id: string, eventData: Partial<TranslationEvent>) => Promise<void>;
-  deleteEventPlaceholder: (id: string) => void;
-  duplicateEventPlaceholder: (id: string) => void;
+  deleteEvent: (id: string) => Promise<void>;
+  duplicateEvent: (id: string) => Promise<void>;
+  deleteEventPlaceholder?: (id: string) => void;
+  duplicateEventPlaceholder?: (id: string) => void;
 }
 
 const EventContext = createContext<EventContextType | undefined>(undefined);
@@ -132,12 +134,25 @@ export function EventProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const deleteEventPlaceholder = (id: string) => {
-    alert(`Delete action is currently a placeholder. Event ID: ${id}`);
+  const deleteEvent = async (id: string) => {
+    if (eventRepo && !id.startsWith("evt-mock-")) {
+      try {
+        await eventRepo.delete(id);
+      } catch (err) {
+        console.warn("Failed to delete event from Supabase:", err);
+      }
+    }
+    setEvents((prev) => prev.filter((event) => event.id !== id));
   };
 
-  const duplicateEventPlaceholder = (id: string) => {
-    alert(`Duplicate action is currently a placeholder. Event ID: ${id}`);
+  const duplicateEvent = async (id: string) => {
+    const existing = events.find((e) => e.id === id);
+    if (!existing) return;
+    const { id: _id, createdAt: _c, updatedAt: _u, organizationId: _o, ownerId: _ow, createdBy: _cb, updatedBy: _ub, ...rest } = existing;
+    await createEvent({
+      ...rest,
+      name: `${existing.name} (Copy)`,
+    });
   };
 
   return (
@@ -146,8 +161,10 @@ export function EventProvider({ children }: { children: ReactNode }) {
         events,
         createEvent,
         updateEvent,
-        deleteEventPlaceholder,
-        duplicateEventPlaceholder,
+        deleteEvent,
+        duplicateEvent,
+        deleteEventPlaceholder: deleteEvent,
+        duplicateEventPlaceholder: duplicateEvent,
       }}
     >
       {children}
