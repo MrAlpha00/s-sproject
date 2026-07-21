@@ -28,7 +28,7 @@ const INITIAL_EVENTS: TranslationEvent[] = [
     date: "2026-07-20",
     time: "09:00",
     sourceLanguage: "English (US)",
-    targetLanguages: ["Spanish (ES)", "Mandarin (ZH)", "French (FR)", "German (DE)"],
+    targetLanguages: ["es-ES", "zh-CN", "fr-FR", "de-DE"],
     translationModel: "Aether-Large-V3",
     latencyMode: "low-latency",
     profanityFilter: true,
@@ -45,7 +45,7 @@ const INITIAL_EVENTS: TranslationEvent[] = [
 ];
 
 export function EventProvider({ children }: { children: ReactNode }) {
-  const [events, setEvents] = useState<TranslationEvent[]>(INITIAL_EVENTS);
+  const [events, setEvents] = useState<TranslationEvent[]>([]);
   const [eventRepo, setEventRepo] = useState<EventRepository | null>(null);
 
   useEffect(() => {
@@ -58,9 +58,8 @@ export function EventProvider({ children }: { children: ReactNode }) {
         const dbEvents = await repo.findAll();
         if (dbEvents && dbEvents.length > 0) {
           setEvents(dbEvents);
-        } else {
-          setEvents(INITIAL_EVENTS);
         }
+        // If DB has no events, keep the initial state (empty) — never auto-load placeholders
       } catch (error) {
         console.warn("Failed to load events from Supabase, using initial fallback:", error);
         setEvents(INITIAL_EVENTS);

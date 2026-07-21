@@ -59,7 +59,7 @@ export default function TranslationStudioPage() {
   // Providers & toggles
   const [speechProvider, setSpeechProvider] = useState("azure");
   const [translationProvider, setTranslationProvider] = useState("azure-translator");
-  const [outputVoiceEngine, setOutputVoiceEngine] = useState("elevenlabs");
+  const [outputVoiceEngine, setOutputVoiceEngine] = useState("azure-tts");
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
   const [recordingEnabled, setRecordingEnabled] = useState(false);
 
@@ -232,6 +232,10 @@ export default function TranslationStudioPage() {
   const speechSynthServiceRef = useRef<SpeechSynthesisService | null>(null);
   const pipelineRef = useRef<TranslationPipeline | null>(null);
   const synthesisQueueRef = useRef<SynthesisQueue | null>(null);
+
+  const isVoiceEnabledRef = useRef(isVoiceEnabled);
+  const voicesListRef = useRef(voicesList);
+  const voiceProfileRef = useRef(voiceProfile);
 
   // Mount logic: initialize Pipeline, fetch Token, scan Devices, load Voices
   useEffect(() => {
@@ -542,40 +546,44 @@ export default function TranslationStudioPage() {
     }
   }, [inputDevice, outputDevice, audioInputsPool, audioOutputsPool]);
 
-  // Hook pipeline completions to audio synthesis enqueuer
-  useEffect(() => {
-    if (pipelineRef.current) {
-      pipelineRef.current.registerOnComplete((msg) => {
-        if (isVoiceEnabled) {
-          msg.targetLanguage.forEach((langCode) => {
-            const text = msg.translatedText[langCode];
-            if (text) {
-              const voiceName = voicesList[langCode] || "en-US-AvaMultilingualNeural";
-              if (synthesisQueueRef.current) {
-                synthesisQueueRef.current.enqueue(text, langCode, voiceName);
-              }
-            }
-          });
-        }
+  // Sync refs for stable callback closures
+  useEffect(() => { isVoiceEnabledRef.current = isVoiceEnabled; }, [isVoiceEnabled]);
+  useEffect(() => { voicesListRef.current = voicesList; }, [voicesList]);
+  useEffect(() => { voiceProfileRef.current = voiceProfile; }, [voiceProfile]);
 
-        // Broadcast translation message over Supabase Realtime (Module 12)
-        if (activeSessionRef.current && streamingServiceRef.current) {
-          streamingServiceRef.current.broadcastTranslation({
-            id: msg.id,
-            sessionId: activeSessionRef.current.id,
-            eventId: selectedEventIdRef.current,
-            originalText: msg.originalText,
-            translatedText: msg.translatedText,
-            sourceLanguage: msg.sourceLanguage,
-            targetLanguages: msg.targetLanguage,
-            voice: voiceProfile,
-            latency: msg.translationLatency,
-          });
-          setMessagesBroadcasted((prev) => prev + 1);
-        }
-      });
-    }
-  }, [isVoiceEnabled, voicesList, voiceProfile]);
+  // Hook pipeline completions to audio synthesis enqueuer (register once, read refs)
+  useEffect(() => {
+    if (!pipelineRef.current) return;
+    pipelineRef.current.registerOnComplete((msg) => {
+      if (isVoiceEnabledRef.current) {
+        msg.targetLanguage.forEach((langCode) => {
+          const text = msg.translatedText[langCode];
+          if (text) {
+            const voiceName = voicesListRef.current[langCode] || "en-US-AvaMultilingualNeural";
+            if (synthesisQueueRef.current) {
+              synthesisQueueRef.current.enqueue(text, langCode, voiceName);
+            }
+          }
+        });
+      }
+
+      // Broadcast translation message over Supabase Realtime
+      if (activeSessionRef.current && streamingServiceRef.current) {
+        streamingServiceRef.current.broadcastTranslation({
+          id: msg.id,
+          sessionId: activeSessionRef.current.id,
+          eventId: selectedEventIdRef.current,
+          originalText: msg.originalText,
+          translatedText: msg.translatedText,
+          sourceLanguage: msg.sourceLanguage,
+          targetLanguages: msg.targetLanguage,
+          voice: voiceProfileRef.current,
+          latency: msg.translationLatency,
+        });
+        setMessagesBroadcasted((prev) => prev + 1);
+      }
+    });
+  }, []);
 
   // Transcripts handlers
   const handleClearTranscripts = () => {

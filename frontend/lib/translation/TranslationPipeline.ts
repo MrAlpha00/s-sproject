@@ -129,7 +129,7 @@ export class TranslationPipeline {
       if (!msg) break;
 
       msg.status = "Translating";
-      this.notifyMessageUpdate(msg);
+      this.safeNotifyMessageUpdate(msg);
 
       const startTime = performance.now();
       let success = false;
@@ -161,7 +161,7 @@ export class TranslationPipeline {
             }
           }
         } catch (err) {
-          console.warn(`Translation attempt ${attempts} failed for msg ${msg.id}`);
+          console.warn(`Translation attempt ${attempts} failed for msg ${msg.id}:`, err);
         }
       }
 
@@ -170,9 +170,9 @@ export class TranslationPipeline {
         this.errorsCount++;
       }
 
-      this.notifyMessageUpdate(msg);
-      this.notifyQueueChange();
-      this.notifyMetrics();
+      this.safeNotifyMessageUpdate(msg);
+      this.safeNotifyQueueChange();
+      this.safeNotifyMetrics();
     }
 
     this.isProcessing = false;
@@ -201,5 +201,23 @@ export class TranslationPipeline {
   private notifyMetrics() {
     const metrics = this.getMetrics();
     this.onMetricsCallbacks.forEach((cb) => cb(metrics));
+  }
+
+  private safeNotifyMessageUpdate(msg: TranslationMessage) {
+    try { this.notifyMessageUpdate(msg); } catch (err) {
+      console.warn("TranslationPipeline: onMessageUpdate callback error:", err);
+    }
+  }
+
+  private safeNotifyQueueChange() {
+    try { this.notifyQueueChange(); } catch (err) {
+      console.warn("TranslationPipeline: onQueueChange callback error:", err);
+    }
+  }
+
+  private safeNotifyMetrics() {
+    try { this.notifyMetrics(); } catch (err) {
+      console.warn("TranslationPipeline: onMetricsUpdate callback error:", err);
+    }
   }
 }

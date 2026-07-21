@@ -149,17 +149,40 @@ export default function ListenPortal({ params }: { params: any }) {
         if (session) {
           setLatestSessionId(session.id);
           setSessionActive(true);
+          setBroadcastEnded(false);
         } else {
           setLatestSessionId(eventId);
           setSessionActive(true);
+          setBroadcastEnded(false);
         }
       } catch (e) {
         setLatestSessionId(eventId);
         setSessionActive(true);
+        setBroadcastEnded(false);
       }
     }
 
     checkActiveSession();
+
+    // Periodically check for active session to recover from stale broadcastEnded state
+    const sessionCheckInterval = setInterval(async () => {
+      if (broadcastEnded || joined) return;
+      try {
+        const { data: session } = await supabase
+          .from("streaming_sessions")
+          .select("id, status")
+          .eq("event_id", eventId)
+          .eq("status", "active")
+          .maybeSingle();
+        if (session) {
+          setLatestSessionId(session.id);
+          setSessionActive(true);
+          setBroadcastEnded(false);
+        }
+      } catch (e) {}
+    }, 10000);
+
+    return () => clearInterval(sessionCheckInterval);
   }, [eventId, supabase]);
 
   // Keyboard accessibility
@@ -309,9 +332,22 @@ export default function ListenPortal({ params }: { params: any }) {
           }
         },
         () => {
+          // Operator stopped broadcast — mark ended but don't call handleLeave immediately
+          // to avoid errors on already-disconnected channels. The periodic session check
+          // will detect new broadcasts and reset broadcastEnded.
           setSessionActive(false);
           setBroadcastEnded(true);
-          handleLeave();
+          if (providerRef.current) {
+            providerRef.current.leaveSession().catch(() => {});
+            providerRef.current = null;
+          }
+          if (streamManagerRef.current) {
+            streamManagerRef.current.stop();
+            streamManagerRef.current = null;
+          }
+          setJoined(false);
+          setStreamingStatus("idle");
+          setPlaybackState("idle");
         }
       );
 
@@ -325,7 +361,7 @@ export default function ListenPortal({ params }: { params: any }) {
 
   const handleLeave = async () => {
     if (providerRef.current) {
-      await providerRef.current.leaveSession();
+      try { await providerRef.current.leaveSession(); } catch (e) {}
       providerRef.current = null;
     }
     if (streamManagerRef.current) {

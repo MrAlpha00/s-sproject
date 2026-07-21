@@ -120,7 +120,7 @@ export class SynthesisQueue {
 
       this.currentMessage = msg;
       msg.status = "Synthesizing";
-      this.notifyMessageUpdate(msg);
+      this.safeNotifyMessageUpdate(msg);
 
       try {
         const result = await this.service.speak(
@@ -130,11 +130,11 @@ export class SynthesisQueue {
           this.deviceId,
           () => {
             msg.status = "Playing";
-            this.notifyMessageUpdate(msg);
+            this.safeNotifyMessageUpdate(msg);
           },
           () => {
             msg.status = "Completed";
-            this.notifyMessageUpdate(msg);
+            this.safeNotifyMessageUpdate(msg);
           }
         );
 
@@ -150,15 +150,15 @@ export class SynthesisQueue {
         msg.status = "Failed";
       }
 
-      this.notifyMessageUpdate(msg);
+      this.safeNotifyMessageUpdate(msg);
       this.queue = this.queue.filter((m) => m.id !== msg.id);
-      this.notifyQueueChange();
-      this.notifyMetrics();
+      this.safeNotifyQueueChange();
+      this.safeNotifyMetrics();
     }
 
     this.isPlaying = false;
     this.currentMessage = null;
-    this.notifyMetrics();
+    this.safeNotifyMetrics();
   }
 
   private notifyMessageUpdate(msg: SpeechMessage) {
@@ -176,5 +176,23 @@ export class SynthesisQueue {
       queueSize: this.queue.filter((m) => m.status === "Pending").length,
       activeVoice: this.currentMessage ? this.currentMessage.voice : "--",
     });
+  }
+
+  private safeNotifyMessageUpdate(msg: SpeechMessage) {
+    try { this.notifyMessageUpdate(msg); } catch (err) {
+      console.warn("SynthesisQueue: onMessageUpdate callback error:", err);
+    }
+  }
+
+  private safeNotifyQueueChange() {
+    try { this.notifyQueueChange(); } catch (err) {
+      console.warn("SynthesisQueue: onQueueChange callback error:", err);
+    }
+  }
+
+  private safeNotifyMetrics() {
+    try { this.notifyMetrics(); } catch (err) {
+      console.warn("SynthesisQueue: onMetricsUpdate callback error:", err);
+    }
   }
 }

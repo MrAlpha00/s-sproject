@@ -34,6 +34,7 @@ export const AZURE_LANGUAGES = [
   { value: "es-ES", label: "Spanish (Español)" },
   { value: "fr-FR", label: "French (Français)" },
   { value: "de-DE", label: "German (Deutsch)" },
+  { value: "zh-CN", label: "Chinese (中文)" },
   { value: "ja-JP", label: "Japanese (日本語)" },
   { value: "ko-KR", label: "Korean (한국어)" }
 ];
