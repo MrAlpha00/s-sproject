@@ -133,7 +133,8 @@ export class SynthesisQueue {
             this.safeNotifyMessageUpdate(msg);
           },
           () => {
-            msg.status = "Completed";
+            // Player finished — do NOT set Completed here, audioData may not be set yet.
+            // Final status is set after the speak() promise resolves.
             this.safeNotifyMessageUpdate(msg);
           }
         );

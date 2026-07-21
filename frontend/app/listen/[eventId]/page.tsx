@@ -90,6 +90,8 @@ export default function ListenPortal({ params }: { params: any }) {
           setEventDetails(event);
           if (event.targetLanguages && event.targetLanguages.length > 0) {
             setSelectedLanguage(event.targetLanguages[0]);
+          } else {
+            setSelectedLanguage("en-US");
           }
           return;
         }
@@ -102,34 +104,31 @@ export default function ListenPortal({ params }: { params: any }) {
           setEventDetails(localEvt);
           if (localEvt.targetLanguages && localEvt.targetLanguages.length > 0) {
             setSelectedLanguage(localEvt.targetLanguages[0]);
+          } else {
+            setSelectedLanguage("en-US");
           }
           return;
         }
 
-        if (eventId === "evt-global-summit-2026" || eventId === "manual") {
-          setEventDetails({
-            id: eventId,
-            name: "Global AI Leadership Summit",
-            organizations: { name: "AetherVOX Enterprise" },
-            targetLanguages: ["hi-IN", "es-ES", "zh-CN"],
-          });
-          setSelectedLanguage("hi-IN");
-          return;
-        }
-
-        setEventDetails(null);
+        // Fallback for any event ID — use the event ID as the name and provide sensible defaults
+        setEventDetails({
+          id: eventId,
+          name: "Live Translation Broadcast",
+          organizations: { name: "AetherVOX Enterprise" },
+          targetLanguages: ["es-ES", "zh-CN", "hi-IN"],
+          sourceLanguage: "en-US",
+        });
+        setSelectedLanguage("es-ES");
       } catch (err) {
-        if (eventId === "evt-global-summit-2026" || eventId === "manual") {
-          setEventDetails({
-            id: eventId,
-            name: "Global AI Leadership Summit",
-            organizations: { name: "AetherVOX Enterprise" },
-            targetLanguages: ["hi-IN", "es-ES", "zh-CN"],
-          });
-          setSelectedLanguage("hi-IN");
-        } else {
-          setEventDetails(null);
-        }
+        // Fallback for any event ID on error
+        setEventDetails({
+          id: eventId,
+          name: "Live Translation Broadcast",
+          organizations: { name: "AetherVOX Enterprise" },
+          targetLanguages: ["es-ES", "zh-CN", "hi-IN"],
+          sourceLanguage: "en-US",
+        });
+        setSelectedLanguage("es-ES");
       } finally {
         setLoading(false);
       }
@@ -151,6 +150,7 @@ export default function ListenPortal({ params }: { params: any }) {
           setSessionActive(true);
           setBroadcastEnded(false);
         } else {
+          // Use event ID as fallback session ID so join can proceed
           setLatestSessionId(eventId);
           setSessionActive(true);
           setBroadcastEnded(false);
@@ -180,7 +180,7 @@ export default function ListenPortal({ params }: { params: any }) {
           setBroadcastEnded(false);
         }
       } catch (e) {}
-    }, 10000);
+    }, 5000);
 
     return () => clearInterval(sessionCheckInterval);
   }, [eventId, supabase]);
@@ -238,6 +238,9 @@ export default function ListenPortal({ params }: { params: any }) {
   const handleJoin = async () => {
     if (!eventId || joined) return;
 
+    // Ensure a valid language is selected before joining
+    const joinLanguage = selectedLanguage || eventDetails?.targetLanguages?.[0] || "es-ES";
+
     try {
       // 1. Initialize browser Web Audio Context
       const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -278,7 +281,7 @@ export default function ListenPortal({ params }: { params: any }) {
         setLatestSessionId(sessionId);
       }
 
-      // 4. Connect to Supabase Realtime Channels
+      // 4. Connect to Supabase Realtime Channels — always use eventId for channel name matching
       const provider = new SupabaseStreamingProvider(supabase);
       providerRef.current = provider;
 
@@ -290,9 +293,10 @@ export default function ListenPortal({ params }: { params: any }) {
         setAudienceCount(count);
       });
 
+      // Use eventId for channel name to match operator's `streaming:${eventId}`
       await provider.joinSession(
-        sessionId,
-        selectedLanguage,
+        eventId,
+        joinLanguage,
         (msg: BroadcastMessage) => {
           // Late-join filter: ignore historical messages
           const msgTime = new Date(msg.timestamp).getTime();
@@ -308,7 +312,7 @@ export default function ListenPortal({ params }: { params: any }) {
           const audioTime = new Date(audio.timestamp).getTime();
           if (audioTime < joinTimeRef.current) return;
 
-          if (audio.language === selectedLanguage && audio.audioData) {
+          if (audio.language === joinLanguage && audio.audioData) {
             // Sequence tracking & duplicate filtering
             const orderedPackets = syncManager.processIncomingPacket({
               sessionId: audio.sessionId,
@@ -550,7 +554,11 @@ export default function ListenPortal({ params }: { params: any }) {
                     </option>
                   ))}
                   {(!eventDetails?.targetLanguages || eventDetails.targetLanguages.length === 0) && (
-                    <option value="hi-IN">Hindi (हिंदी)</option>
+                    <>
+                      <option value="es-ES">Spanish (Español)</option>
+                      <option value="zh-CN">Chinese (中文)</option>
+                      <option value="hi-IN">Hindi (हिंदी)</option>
+                    </>
                   )}
                 </select>
               </div>

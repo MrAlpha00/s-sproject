@@ -638,6 +638,11 @@ export default function TranslationStudioPage() {
       await speechServiceRef.current.stop();
     }
 
+    // Auto-enable translation pipeline when mic starts (if not already enabled and targets exist)
+    if (!isTranslating && targetLanguages.length > 0) {
+      setIsTranslating(true);
+    }
+
     const service = new SpeechRecognitionService(
       azureToken,
       azureRegion,
@@ -655,8 +660,8 @@ export default function TranslationStudioPage() {
           const recLatency = Math.floor(Math.random() * 40) + 120; // 120-160ms
           setRecognitionLatency(`${recLatency}ms`);
 
-          // Pipe final recognized sentence to Translation Pipeline
-          if (pipelineRef.current && isTranslating) {
+          // Always pipe final recognized sentences into the translation pipeline
+          if (pipelineRef.current && targetLanguages.length > 0) {
             pipelineRef.current.enqueue(
               result.text,
               sourceLanguage,
@@ -799,6 +804,13 @@ export default function TranslationStudioPage() {
       setIsStreamingActive(true);
       setMessagesBroadcasted(0);
       sequenceNumberRef.current = 0;
+
+      // Auto-start mic and translation if not already running
+      if (!isListening) {
+        await handleStartListening();
+      } else if (!isTranslating && targetLanguages.length > 0) {
+        setIsTranslating(true);
+      }
     } catch (err) {
       console.error("Failed to start session:", err);
       alert("Failed to start streaming session. Ensure database connection is available.");

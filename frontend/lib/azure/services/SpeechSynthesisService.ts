@@ -44,6 +44,9 @@ export class SpeechSynthesisService {
       return this.speakWebSpeechFallback(text, language, onStart, onEnd, startTime);
     }
 
+    // Close any existing player/synthesizer before creating new ones
+    this.cleanup();
+
     try {
       const speechConfig = sdk.SpeechConfig.fromAuthorizationToken(this.token, this.region);
       speechConfig.speechSynthesisVoiceName = voiceName;

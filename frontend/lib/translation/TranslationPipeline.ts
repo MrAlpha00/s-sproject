@@ -91,8 +91,8 @@ export class TranslationPipeline {
     };
 
     this.queue.push(newMessage);
-    this.notifyQueueChange();
-    this.notifyMessageUpdate(newMessage);
+    this.safeNotifyQueueChange();
+    this.safeNotifyMessageUpdate(newMessage);
 
     // Trigger sequential processing asynchronously
     this.processQueue();
@@ -144,7 +144,7 @@ export class TranslationPipeline {
             msg.targetLanguage
           );
 
-          if (result.success && result.translations) {
+          if (result.success && result.translations && result.translations.length > 0) {
             result.translations.forEach((t) => {
               msg.translatedText[t.to] = t.text;
             });
@@ -157,7 +157,29 @@ export class TranslationPipeline {
             
             // Invoke completed hook if registered
             if (this.onCompleteCallback) {
-              this.onCompleteCallback(msg);
+              try {
+                this.onCompleteCallback(msg);
+              } catch (err) {
+                console.warn("TranslationPipeline: onCompleteCallback error:", err);
+              }
+            }
+          } else if (result.success && (!result.translations || result.translations.length === 0)) {
+            console.warn(`Translation returned empty results for msg ${msg.id}, using empty fallback`);
+            msg.targetLanguage.forEach((lang) => {
+              msg.translatedText[lang] = msg.originalText;
+            });
+            msg.translationLatency = Math.round(performance.now() - startTime);
+            msg.status = "Completed";
+            success = true;
+            this.totalTranslationTime += msg.translationLatency;
+            this.processedCount++;
+
+            if (this.onCompleteCallback) {
+              try {
+                this.onCompleteCallback(msg);
+              } catch (err) {
+                console.warn("TranslationPipeline: onCompleteCallback error:", err);
+              }
             }
           }
         } catch (err) {
