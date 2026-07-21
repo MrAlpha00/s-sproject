@@ -776,6 +776,51 @@ export default function TranslationStudioPage() {
     }
   };
 
+  const handleReplaySpeechItem = (text: string, langCode: string, key: string) => {
+    const voiceName = voicesList[langCode] || "en-US-AvaMultilingualNeural";
+    if (synthesisQueueRef.current) {
+      synthesisQueueRef.current.enqueue(text, langCode, voiceName);
+    }
+  };
+
+  const handleDownloadAudio = (key: string) => {
+    const speechInfo = speechStatuses[key];
+    if (!speechInfo) return;
+
+    const queueItem = synthesisQueueRef.current?.getQueue().find((m) => `${m.id}-${m.language}` === key || m.id === key);
+    const audioData = (queueItem as any)?.audioData || speechInfo;
+
+    const matchedTranscript = transcripts.find((t) =>
+      t.targetLanguage.some((lang) => `${t.id}-${lang}` === key)
+    );
+    const langCode = matchedTranscript?.targetLanguage.find((lang) => `${matchedTranscript.id}-${lang}` === key) || key.split("-").pop() || "audio";
+
+    const synQueue = synthesisQueueRef.current?.getQueue();
+    const queueMsg = synQueue?.find((m) => m.id === key || `${m.id}-${m.language}` === key);
+    const rawAudio = queueMsg?.audioData;
+
+    if (rawAudio) {
+      try {
+        const binaryString = atob(rawAudio);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: "audio/wav" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `aethervox-${langCode}-${Date.now()}.wav`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.warn("Failed to decode audio for download:", err);
+      }
+    }
+  };
+
   // Session management handlers (Module 12)
   const handleStartSession = async () => {
     if (!streamingServiceRef.current) return;
@@ -1274,6 +1319,8 @@ export default function TranslationStudioPage() {
             onPlaySpeech={handlePlaySpeechItem}
             onPauseSpeech={handlePauseSpeechItem}
             onStopSpeech={handleStopSpeechItem}
+            onReplaySpeech={handleReplaySpeechItem}
+            onDownloadAudio={handleDownloadAudio}
           />
         </div>
 

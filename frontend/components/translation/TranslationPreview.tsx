@@ -13,8 +13,14 @@ import {
   Pause,
   Square,
   VolumeX,
+  RotateCcw,
+  ArrowDownToLine,
+  Mic,
+  Globe,
+  Speaker,
 } from "lucide-react";
 import { TranslationMessage } from "@/types/translation";
+import { getLanguageLabel } from "@/lib/languages";
 
 export interface SpeechStatusInfo {
   voice: string;
@@ -35,6 +41,8 @@ interface TranslationPreviewProps {
   onPlaySpeech: (text: string, lang: string, key: string) => void;
   onPauseSpeech: (key: string) => void;
   onStopSpeech: (key: string) => void;
+  onReplaySpeech: (text: string, lang: string, key: string) => void;
+  onDownloadAudio: (key: string) => void;
 }
 
 export function TranslationPreview({
@@ -47,6 +55,8 @@ export function TranslationPreview({
   onPlaySpeech,
   onPauseSpeech,
   onStopSpeech,
+  onReplaySpeech,
+  onDownloadAudio,
 }: TranslationPreviewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -84,7 +94,7 @@ export function TranslationPreview({
       case "Paused":
         return "text-zinc-400 border-white/[0.04] bg-zinc-950/20";
       case "Completed":
-        return "text-blue-400 border-blue-500/20 bg-blue-500/5";
+        return "text-emerald-400 border-emerald-500/20 bg-emerald-500/5";
       case "Failed":
         return "text-red-400 border-red-500/20 bg-red-500/5";
       case "Pending":
@@ -152,142 +162,203 @@ export function TranslationPreview({
           </div>
         ) : (
           <div className="space-y-3.5">
-            {transcripts.map((block) => (
-              <div
-                key={block.id}
-                className="bg-zinc-950/40 border border-white/[0.04] rounded-xl p-4.5 space-y-4 hover:border-white/[0.08] transition-colors shadow-inner"
-              >
-                {/* Source Line */}
-                <div className="flex gap-3 items-start">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-electric-blue/10 border border-electric-blue/20 text-electric-blue text-[10px] font-bold">
-                    SRC
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[9px] font-bold uppercase tracking-wider text-zinc-550 font-mono">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-white font-bold font-sans">Presenter Speech</span>
-                        <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-zinc-400 font-semibold border border-white/[0.06]">
-                          {block.sourceLanguage}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span>{new Date(block.timestamp).toLocaleTimeString()}</span>
-                        <span>•</span>
-                        <span>Rec: {block.recognitionLatency}ms</span>
-                        {block.confidence !== undefined && (
-                          <>
-                            <span>•</span>
-                            <span className={`inline-flex items-center gap-0.5 rounded border px-1 ${getConfidenceColor(block.confidence)}`}>
-                              <Sparkles className="h-2 w-2" />
-                              {block.confidence}%
-                            </span>
-                          </>
-                        )}
-                      </div>
+            {transcripts.map((block) => {
+              const allTranslationsDone = block.targetLanguage.every(
+                (lang) => block.translatedText[lang]
+              );
+              const anySpeechPlaying = block.targetLanguage.some((lang) => {
+                const info = speechStatuses[`${block.id}-${lang}`];
+                return info?.status === "Playing" || info?.status === "Synthesizing";
+              });
+              const anySpeechCompleted = block.targetLanguage.some((lang) => {
+                const info = speechStatuses[`${block.id}-${lang}`];
+                return info?.status === "Completed";
+              });
+
+              return (
+                <div
+                  key={block.id}
+                  className={`bg-zinc-950/40 border rounded-xl p-4.5 space-y-4 transition-all shadow-inner ${
+                    anySpeechPlaying
+                      ? "border-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.06)]"
+                      : allTranslationsDone && anySpeechCompleted
+                      ? "border-emerald-500/15"
+                      : block.status === "Failed"
+                      ? "border-red-500/20"
+                      : "border-white/[0.04] hover:border-white/[0.08]"
+                  }`}
+                >
+                  {/* === Section 1: Speaker Recognition === */}
+                  <div className="flex gap-3 items-start">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-electric-blue/10 border border-electric-blue/20 text-electric-blue">
+                      <Mic className="h-3 w-3" />
                     </div>
-                    <p className="text-[12px] text-zinc-150 mt-1.5 leading-relaxed font-medium">
-                      {block.originalText}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[9px] font-bold uppercase tracking-wider text-zinc-550 font-mono">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-white font-bold font-sans">Speaker</span>
+                          <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-zinc-400 font-semibold border border-white/[0.06]">
+                            {getLanguageLabel(block.sourceLanguage)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span>{new Date(block.timestamp).toLocaleTimeString()}</span>
+                          <span>•</span>
+                          <span>Rec: {block.recognitionLatency}ms</span>
+                          {block.confidence !== undefined && (
+                            <>
+                              <span>•</span>
+                              <span className={`inline-flex items-center gap-0.5 rounded border px-1 ${getConfidenceColor(block.confidence)}`}>
+                                <Sparkles className="h-2 w-2" />
+                                {block.confidence}%
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-[12px] text-zinc-150 mt-1.5 leading-relaxed font-medium">
+                        {block.originalText}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* === Section 2: Translations + Voice (grouped) === */}
+                  <div className="pl-9 border-l border-white/[0.04] space-y-3.5">
+                    {block.targetLanguage.map((langCode) => {
+                      const translationText = block.translatedText[langCode];
+                      const hasTranslation = !!translationText;
+                      const isTranslating = block.status === "Translating" || block.status === "Pending";
+                      const isFailed = block.status === "Failed" && !hasTranslation;
+
+                      const speechKey = `${block.id}-${langCode}`;
+                      const speechInfo = speechStatuses[speechKey] || {
+                        voice: "Matching...",
+                        status: "Pending" as const,
+                        latency: 0,
+                        duration: 0,
+                      };
+
+                      return (
+                        <div key={langCode} className="space-y-2">
+                          {/* Translation header */}
+                          <div className="flex items-center justify-between gap-3 text-[9px] font-bold uppercase tracking-wider text-zinc-550 font-mono">
+                            <div className="flex items-center gap-1.5">
+                              <Globe className="h-3 w-3 text-accent-purple" />
+                              <span className="text-accent-purple font-extrabold font-sans">
+                                {getLanguageLabel(langCode)}
+                              </span>
+                              <span>•</span>
+                              <span className="text-zinc-500">Trans: {block.translationLatency || "--"}ms</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {getStatusIcon(isFailed ? "Failed" : isTranslating ? "Translating" : "Completed")}
+                            </div>
+                          </div>
+
+                          {/* Translated text */}
+                          <p className={`text-[12px] leading-relaxed ${
+                            isFailed ? "text-red-400 italic" : isTranslating ? "text-zinc-500 italic" : "text-zinc-250 font-medium"
+                          }`}>
+                            {isFailed
+                              ? "Translation failed. Check connection."
+                              : isTranslating
+                              ? "Translating phrase..."
+                              : translationText}
+                          </p>
+
+                          {/* === Section 3: Voice Playback Controls === */}
+                          {hasTranslation && (
+                            <div className={`flex items-center justify-between gap-2.5 rounded-lg p-2 border text-[9px] font-bold uppercase tracking-wider text-zinc-500 font-mono transition-all ${
+                              speechInfo.status === "Playing"
+                                ? "bg-emerald-500/5 border-emerald-500/15"
+                                : speechInfo.status === "Completed"
+                                ? "bg-emerald-500/3 border-emerald-500/10"
+                                : "bg-zinc-950/60 border-white/[0.02]"
+                            }`}>
+                              <div className="flex items-center gap-1.5">
+                                {/* Play / Pause toggle */}
+                                {speechInfo.status === "Playing" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => onPauseSpeech(speechKey)}
+                                    className="h-5.5 w-5.5 rounded bg-amber-500/15 border border-amber-500/25 flex items-center justify-center text-amber-400 hover:bg-amber-500/25 transition-colors cursor-pointer"
+                                    title="Pause"
+                                  >
+                                    <Pause className="h-2.5 w-2.5 fill-current" />
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => onPlaySpeech(translationText, langCode, speechKey)}
+                                    className="h-5.5 w-5.5 rounded bg-electric-blue/10 border border-electric-blue/20 flex items-center justify-center text-electric-blue hover:bg-electric-blue/20 transition-colors cursor-pointer"
+                                    title="Play"
+                                  >
+                                    <Volume2 className="h-2.5 w-2.5 fill-current" />
+                                  </button>
+                                )}
+
+                                {/* Stop */}
+                                {(speechInfo.status === "Playing" || speechInfo.status === "Paused" || speechInfo.status === "Synthesizing") && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onStopSpeech(speechKey)}
+                                    className="h-5.5 w-5.5 rounded bg-zinc-900 border border-red-500/20 flex items-center justify-center text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+                                    title="Stop"
+                                  >
+                                    <Square className="h-2.5 w-2.5 fill-current" />
+                                  </button>
+                                )}
+
+                                {/* Replay (only when completed) */}
+                                {speechInfo.status === "Completed" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onReplaySpeech(translationText, langCode, speechKey)}
+                                    className="h-5.5 w-5.5 rounded bg-zinc-900 border border-white/[0.06] flex items-center justify-center text-zinc-400 hover:text-white hover:border-white/[0.15] transition-colors cursor-pointer"
+                                    title="Replay"
+                                  >
+                                    <RotateCcw className="h-2.5 w-2.5" />
+                                  </button>
+                                )}
+
+                                {/* Download audio (only when completed with audio data) */}
+                                {speechInfo.status === "Completed" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onDownloadAudio(speechKey)}
+                                    className="h-5.5 w-5.5 rounded bg-zinc-900 border border-white/[0.06] flex items-center justify-center text-zinc-400 hover:text-electric-blue hover:border-electric-blue/20 transition-colors cursor-pointer"
+                                    title="Download Audio"
+                                  >
+                                    <ArrowDownToLine className="h-2.5 w-2.5" />
+                                  </button>
+                                )}
+
+                                <span className="text-zinc-400 font-bold truncate max-w-[120px] font-sans">
+                                  {speechInfo.voice.split("Neural")[0]}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <span>TTS: {speechInfo.latency ? `${speechInfo.latency}ms` : "--"}</span>
+                                <span>•</span>
+                                <span>Len: {speechInfo.duration ? `${(speechInfo.duration / 1000).toFixed(1)}s` : "--"}</span>
+                                <span>•</span>
+                                <span className={`px-1 rounded border font-extrabold ${getSpeechStatusColor(speechInfo.status)}`}>
+                                  {speechInfo.status === "Completed" && (
+                                    <Check className="h-2 w-2 inline mr-0.5" />
+                                  )}
+                                  {speechInfo.status}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-
-                {/* Target Translation List */}
-                <div className="pl-9 border-l border-white/[0.04] space-y-3.5">
-                  {block.targetLanguage.map((langCode) => {
-                    const translationText = block.translatedText[langCode];
-                    const hasTranslation = !!translationText;
-                    const isTranslating = block.status === "Translating" || block.status === "Pending";
-                    const isFailed = block.status === "Failed" && !hasTranslation;
-
-                    const speechKey = `${block.id}-${langCode}`;
-                    const speechInfo = speechStatuses[speechKey] || {
-                      voice: "Matching...",
-                      status: "Pending",
-                      latency: 0,
-                      duration: 0,
-                    };
-
-                    return (
-                      <div key={langCode} className="space-y-2">
-                        <div className="flex items-center justify-between gap-3 text-[9px] font-bold uppercase tracking-wider text-zinc-550 font-mono">
-                          <div className="flex items-center gap-1.5">
-                            <span className="rounded bg-zinc-900 border border-white/[0.06] px-1.5 py-0.5 text-zinc-400">
-                              {langCode}
-                            </span>
-                            <span>➔</span>
-                            <span className="text-electric-blue font-extrabold font-sans">Translation</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span>Trans: {block.translationLatency || "--"}ms</span>
-                            <span>•</span>
-                            {getStatusIcon(isFailed ? "Failed" : isTranslating ? "Translating" : "Completed")}
-                          </div>
-                        </div>
-
-                        <p className={`text-[12px] leading-relaxed ${
-                          isFailed ? "text-red-400 italic" : isTranslating ? "text-zinc-500 italic" : "text-zinc-250 font-medium"
-                        }`}>
-                          {isFailed
-                            ? "Translation failed. Check connection."
-                            : isTranslating
-                            ? "Translating phrase..."
-                            : translationText}
-                        </p>
-
-                        {/* Speech synthesis controls */}
-                        {hasTranslation && (
-                          <div className="flex items-center justify-between gap-2.5 bg-zinc-950/60 rounded-lg p-2 border border-white/[0.02] text-[9px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
-                            <div className="flex items-center gap-2">
-                              {speechInfo.status === "Playing" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => onPauseSpeech(speechKey)}
-                                  className="h-5.5 w-5.5 rounded bg-zinc-900 border border-white/[0.06] flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                                >
-                                  <Pause className="h-2.5 w-2.5 fill-current" />
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => onPlaySpeech(translationText, langCode, speechKey)}
-                                  className="h-5.5 w-5.5 rounded bg-electric-blue/10 border border-electric-blue/20 flex items-center justify-center text-electric-blue hover:bg-electric-blue/20 transition-colors cursor-pointer"
-                                >
-                                  <Volume2 className="h-2.5 w-2.5 fill-current" />
-                                </button>
-                              )}
-
-                              {(speechInfo.status === "Playing" || speechInfo.status === "Paused" || speechInfo.status === "Synthesizing") && (
-                                <button
-                                  type="button"
-                                  onClick={() => onStopSpeech(speechKey)}
-                                  className="h-5.5 w-5.5 rounded bg-zinc-900 border border-red-500/20 flex items-center justify-center text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
-                                >
-                                  <Square className="h-2.5 w-2.5 fill-current" />
-                                </button>
-                              )}
-
-                              <span className="text-zinc-400 font-bold truncate max-w-[120px] font-sans">
-                                {speechInfo.voice.split("Neural")[0]}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <span>TTS: {speechInfo.latency ? `${speechInfo.latency}ms` : "--"}</span>
-                              <span>•</span>
-                              <span>Len: {speechInfo.duration ? `${(speechInfo.duration / 1000).toFixed(1)}s` : "--"}</span>
-                              <span>•</span>
-                              <span className={`px-1 rounded border font-extrabold ${getSpeechStatusColor(speechInfo.status)}`}>
-                                {speechInfo.status}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Live Interim Input */}
             {interimText && (
