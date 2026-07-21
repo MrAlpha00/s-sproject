@@ -17,33 +17,6 @@ interface EventContextType {
 
 const EventContext = createContext<EventContextType | undefined>(undefined);
 
-const INITIAL_EVENTS: TranslationEvent[] = [
-  {
-    id: "evt-global-summit-2026",
-    organizationId: "org-aether-main",
-    ownerId: "usr-admin-001",
-    name: "Global AI Leadership Summit",
-    description: "Keynote speeches and panel discussions covering the future of agentic coding and real-time multilingual broadcasting.",
-    venue: "San Francisco Conference Hall A / Hybrid",
-    date: "2026-07-20",
-    time: "09:00",
-    sourceLanguage: "English (US)",
-    targetLanguages: ["es-ES", "zh-CN", "fr-FR", "de-DE"],
-    translationModel: "Aether-Large-V3",
-    latencyMode: "low-latency",
-    profanityFilter: true,
-    targetVocabulary: "AetherVOX, Supabase, Next.js, agentic-systems",
-    inputDevice: "Shure SM7B Broadcast Mic (USB-1)",
-    outputDevice: "AetherVOX Live Broadcast Mixer",
-    voiceProfile: "Enterprise Voice Male A (Cloned)",
-    status: "scheduled",
-    createdBy: "admin@aethervox.com",
-    updatedBy: "admin@aethervox.com",
-    createdAt: "2026-07-12T10:00:00Z",
-    updatedAt: "2026-07-12T10:00:00Z",
-  }
-];
-
 export function EventProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<TranslationEvent[]>([]);
   const [eventRepo, setEventRepo] = useState<EventRepository | null>(null);
@@ -61,8 +34,8 @@ export function EventProvider({ children }: { children: ReactNode }) {
         }
         // If DB has no events, keep the initial state (empty) — never auto-load placeholders
       } catch (error) {
-        console.warn("Failed to load events from Supabase, using initial fallback:", error);
-        setEvents(INITIAL_EVENTS);
+        console.warn("Failed to load events from Supabase:", error);
+        setEvents([]);
       }
     }
 

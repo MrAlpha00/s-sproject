@@ -17,6 +17,7 @@ import {
   Languages,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { normalizeLanguageCode, normalizeLanguageCodes } from "@/lib/languages";
 
 export interface PoolOption {
   value: string;
@@ -119,8 +120,8 @@ export function TranslationConfigPanel({
     if (selectedEventId && selectedEventId !== "manual") {
       const event = events.find((e) => e.id === selectedEventId);
       if (event) {
-        setSourceLanguage(event.sourceLanguage);
-        setTargetLanguages(event.targetLanguages);
+        setSourceLanguage(normalizeLanguageCode(event.sourceLanguage));
+        setTargetLanguages(normalizeLanguageCodes(event.targetLanguages));
         setVoiceProfile(event.voiceProfile);
         setTranslationModel(event.translationModel);
         setLatencyMode(event.latencyMode);

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight, Check, Sparkles, Volume2, Mic2, FileText, Settings, Languages } from "lucide-react";
 import { TranslationEvent, TranslationEventStatus } from "@/types/event";
 import { LanguageSelector } from "@/components/events/LanguageSelector";
+import { normalizeLanguageCode, normalizeLanguageCodes } from "@/lib/languages";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface EventWizardProps {
@@ -20,8 +21,12 @@ export function EventWizard({ initialData, onSubmit, onCancel }: EventWizardProp
   const [date, setDate] = useState(initialData?.date ?? "");
   const [time, setTime] = useState(initialData?.time ?? "");
   
-  const [sourceLanguage, setSourceLanguage] = useState(initialData?.sourceLanguage ?? "English (US)");
-  const [targetLanguages, setTargetLanguages] = useState<string[]>(initialData?.targetLanguages ?? []);
+  const [sourceLanguage, setSourceLanguage] = useState(
+    initialData ? normalizeLanguageCode(initialData.sourceLanguage) : "en-US"
+  );
+  const [targetLanguages, setTargetLanguages] = useState<string[]>(
+    initialData ? normalizeLanguageCodes(initialData.targetLanguages) : []
+  );
   
   const [translationModel, setTranslationModel] = useState(initialData?.translationModel ?? "Aether-Large-V3");
   const [latencyMode, setLatencyMode] = useState<"low-latency" | "standard" | "high-fidelity">(initialData?.latencyMode ?? "low-latency");

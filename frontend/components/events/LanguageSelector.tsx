@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Info } from "lucide-react";
+import { AZURE_LANGUAGES } from "@/lib/azure/constants";
 
 interface LanguageSelectorProps {
   sourceLanguage: string;
@@ -9,41 +10,24 @@ interface LanguageSelectorProps {
   setTargetLanguages: (langs: string[]) => void;
 }
 
-const LANGUAGES_POOL = [
-  "English (US)",
-  "English (UK)",
-  "Spanish (ES)",
-  "French (FR)",
-  "German (DE)",
-  "Mandarin (ZH)",
-  "Japanese (JA)",
-  "Arabic (AR)",
-  "Hindi (HI)",
-  "Portuguese (PT)",
-  "Italian (IT)",
-  "Russian (RU)",
-  "Korean (KO)",
-];
-
 export function LanguageSelector({
   sourceLanguage,
   setSourceLanguage,
   targetLanguages,
   setTargetLanguages,
 }: LanguageSelectorProps) {
-  const handleToggleTarget = (lang: string) => {
-    if (lang === sourceLanguage) return; // Cannot translate to same language
+  const handleToggleTarget = (langVal: string) => {
+    if (langVal === sourceLanguage) return;
 
-    if (targetLanguages.includes(lang)) {
-      setTargetLanguages(targetLanguages.filter((l) => l !== lang));
+    if (targetLanguages.includes(langVal)) {
+      setTargetLanguages(targetLanguages.filter((l) => l !== langVal));
     } else {
-      setTargetLanguages([...targetLanguages, lang]);
+      setTargetLanguages([...targetLanguages, langVal]);
     }
   };
 
   const handleSourceChange = (newSource: string) => {
     setSourceLanguage(newSource);
-    // Remove the new source language from target languages if it was selected
     setTargetLanguages(targetLanguages.filter((l) => l !== newSource));
   };
 
@@ -62,9 +46,9 @@ export function LanguageSelector({
           onChange={(e) => handleSourceChange(e.target.value)}
           className="h-10 w-full rounded-lg border border-white/[0.06] bg-zinc-900 px-3 py-2 text-xs text-zinc-300 focus:border-electric-blue/50 focus:outline-none"
         >
-          {LANGUAGES_POOL.map((lang) => (
-            <option key={lang} value={lang} className="bg-zinc-950 text-zinc-300">
-              {lang}
+          {AZURE_LANGUAGES.map((lang) => (
+            <option key={lang.value} value={lang.value} className="bg-zinc-950 text-zinc-300">
+              {lang.label}
             </option>
           ))}
         </select>
@@ -86,16 +70,16 @@ export function LanguageSelector({
         
         {/* Languages Grid Chips */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {LANGUAGES_POOL.map((lang) => {
-            const isSource = lang === sourceLanguage;
-            const isSelected = targetLanguages.includes(lang);
+          {AZURE_LANGUAGES.map((lang) => {
+            const isSource = lang.value === sourceLanguage;
+            const isSelected = targetLanguages.includes(lang.value);
 
             return (
               <button
                 type="button"
-                key={lang}
+                key={lang.value}
                 disabled={isSource}
-                onClick={() => handleToggleTarget(lang)}
+                onClick={() => handleToggleTarget(lang.value)}
                 className={`flex items-center justify-between rounded-lg border p-2.5 text-left text-xs transition-all duration-150 ${
                   isSource
                     ? "bg-zinc-900/20 border-white/[0.02] text-zinc-600 cursor-not-allowed"
@@ -104,7 +88,7 @@ export function LanguageSelector({
                     : "bg-zinc-900 border-white/[0.04] text-zinc-400 hover:border-white/[0.1] hover:text-white"
                 }`}
               >
-                <span className="truncate">{lang}</span>
+                <span className="truncate">{lang.label}</span>
                 {isSelected && <Check className="h-3.5 w-3.5 text-electric-blue shrink-0 ml-1.5" />}
                 {isSource && <span className="text-[9px] uppercase font-bold text-zinc-600 shrink-0 ml-1.5">Source</span>}
               </button>

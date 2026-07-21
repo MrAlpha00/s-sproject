@@ -14,6 +14,7 @@ import { SpeechSynthesisService } from "@/lib/azure/services/SpeechSynthesisServ
 import { SynthesisQueue } from "@/lib/audio/SynthesisQueue";
 import { TranslationMessage } from "@/types/translation";
 import { AZURE_LANGUAGES } from "@/lib/azure/constants";
+import { normalizeLanguageCode, normalizeLanguageCodes } from "@/lib/languages";
 import { createClient } from "@/supabase/client";
 import { VoiceRepository } from "@/lib/database/repositories/VoiceRepository";
 import { VoiceProfileRepository } from "@/lib/database/repositories/VoiceProfileRepository";
@@ -69,7 +70,7 @@ export default function TranslationStudioPage() {
   // Selections
   const [selectedEventId, setSelectedEventId] = useState("manual");
   const [sourceLanguage, setSourceLanguage] = useState("en-US");
-  const [targetLanguages, setTargetLanguages] = useState<string[]>(["es-ES", "zh-CN"]);
+  const [targetLanguages, setTargetLanguages] = useState<string[]>([]);
   const [voiceProfile, setVoiceProfile] = useState("Standard Neutral Narrator Male");
   const [translationModel, setTranslationModel] = useState("Aether-Large-V3");
   const [latencyMode, setLatencyMode] = useState<"low-latency" | "standard" | "high-fidelity">("low-latency");
@@ -224,6 +225,7 @@ export default function TranslationStudioPage() {
     "es-ES": "es-ES-AlvaroNeural",
     "fr-FR": "fr-FR-HenriNeural",
     "de-DE": "de-DE-ConradNeural",
+    "zh-CN": "zh-CN-XiaoxiaoNeural",
     "ja-JP": "ja-JP-KeitaNeural",
     "ko-KR": "ko-KR-InJoonNeural",
   });
@@ -463,8 +465,8 @@ export default function TranslationStudioPage() {
                 name: profile.profileName,
                 inputDevice: profile.inputDevice,
                 outputDevice: profile.outputDevice,
-                sourceLanguage: profile.sourceLanguage,
-                targetLanguages: profile.targetLanguages,
+                sourceLanguage: normalizeLanguageCode(profile.sourceLanguage || "en-US"),
+                targetLanguages: normalizeLanguageCodes(profile.targetLanguages || []),
                 voiceSelection: profile.voiceSelection || {},
                 azureRegion: profile.azureRegion,
                 audioSettings: profile.audioSettings || {},
@@ -474,14 +476,16 @@ export default function TranslationStudioPage() {
             const eventRepo = new EventRepository(supabase);
             const event = await eventRepo.findById(eventId);
             if (event) {
+              const normalizedSource = normalizeLanguageCode(event.sourceLanguage || "en-US");
+              const normalizedTargets = normalizeLanguageCodes(event.targetLanguages || []);
               configObj = {
                 id: event.id,
                 name: event.name,
                 inputDevice: event.inputDevice || "default",
                 outputDevice: event.outputDevice || "default",
-                sourceLanguage: event.sourceLanguage,
-                targetLanguages: event.targetLanguages,
-                voiceSelection: event.voiceProfile ? { [event.targetLanguages[0] || "en-US"]: event.voiceProfile } : {},
+                sourceLanguage: normalizedSource,
+                targetLanguages: normalizedTargets,
+                voiceSelection: event.voiceProfile ? { [normalizedTargets[0] || "en-US"]: event.voiceProfile } : {},
                 azureRegion: "centralindia",
                 audioSettings: {},
               };

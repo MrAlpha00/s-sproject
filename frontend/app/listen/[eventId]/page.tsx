@@ -28,7 +28,7 @@ import { BroadcastMessage, AudioPacketMetadata, StreamingStatus } from "@/types/
 import { PlaybackState, BufferState } from "@/types/audio-stream";
 import { AudioSyncManager } from "@/lib/audio/AudioSyncManager";
 import { AudioStreamManager } from "@/lib/audio/AudioStreamManager";
-import { AZURE_LANGUAGES } from "@/lib/azure/constants";
+import { normalizeLanguageCode, normalizeLanguageCodes, AZURE_LANGUAGES } from "@/lib/languages";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function ListenPortal({ params }: { params: any }) {
@@ -87,11 +87,16 @@ export default function ListenPortal({ params }: { params: any }) {
           .single();
 
         if (event && !error) {
-          setEventDetails(event);
-          if (event.targetLanguages && event.targetLanguages.length > 0) {
-            setSelectedLanguage(event.targetLanguages[0]);
+          setEventDetails({
+            ...event,
+            sourceLanguage: normalizeLanguageCode(event.sourceLanguage || "en-US"),
+            targetLanguages: normalizeLanguageCodes(event.targetLanguages || []),
+          });
+          const normalizedTargets = normalizeLanguageCodes(event.targetLanguages || []);
+          if (normalizedTargets.length > 0) {
+            setSelectedLanguage(normalizedTargets[0]);
           } else {
-            setSelectedLanguage("en-US");
+            setSelectedLanguage("");
           }
           return;
         }
@@ -101,34 +106,39 @@ export default function ListenPortal({ params }: { params: any }) {
         const repo = new EventRepository(supabase);
         const localEvt = await repo.findById(eventId);
         if (localEvt) {
-          setEventDetails(localEvt);
-          if (localEvt.targetLanguages && localEvt.targetLanguages.length > 0) {
-            setSelectedLanguage(localEvt.targetLanguages[0]);
+          setEventDetails({
+            ...localEvt,
+            sourceLanguage: normalizeLanguageCode(localEvt.sourceLanguage || "en-US"),
+            targetLanguages: normalizeLanguageCodes(localEvt.targetLanguages || []),
+          });
+          const normalizedTargets = normalizeLanguageCodes(localEvt.targetLanguages || []);
+          if (normalizedTargets.length > 0) {
+            setSelectedLanguage(normalizedTargets[0]);
           } else {
-            setSelectedLanguage("en-US");
+            setSelectedLanguage("");
           }
           return;
         }
 
-        // Fallback for any event ID — use the event ID as the name and provide sensible defaults
+        // Fallback for any event ID — minimal data, no hardcoded languages
         setEventDetails({
           id: eventId,
           name: "Live Translation Broadcast",
           organizations: { name: "AetherVOX Enterprise" },
-          targetLanguages: ["es-ES", "zh-CN", "hi-IN"],
+          targetLanguages: [],
           sourceLanguage: "en-US",
         });
-        setSelectedLanguage("es-ES");
+        setSelectedLanguage("");
       } catch (err) {
         // Fallback for any event ID on error
         setEventDetails({
           id: eventId,
           name: "Live Translation Broadcast",
           organizations: { name: "AetherVOX Enterprise" },
-          targetLanguages: ["es-ES", "zh-CN", "hi-IN"],
+          targetLanguages: [],
           sourceLanguage: "en-US",
         });
-        setSelectedLanguage("es-ES");
+        setSelectedLanguage("");
       } finally {
         setLoading(false);
       }
@@ -239,7 +249,7 @@ export default function ListenPortal({ params }: { params: any }) {
     if (!eventId || joined) return;
 
     // Ensure a valid language is selected before joining
-    const joinLanguage = selectedLanguage || eventDetails?.targetLanguages?.[0] || "es-ES";
+    const joinLanguage = selectedLanguage || eventDetails?.targetLanguages?.[0] || "";
 
     try {
       // 1. Initialize browser Web Audio Context
@@ -420,9 +430,10 @@ export default function ListenPortal({ params }: { params: any }) {
     await handleJoin();
   };
 
-  const getLanguageLabel = (code: string) => {
-    const match = AZURE_LANGUAGES.find((l) => l.value === code);
-    return match ? match.label : code;
+  const getLanguageLabelFromCode = (code: string) => {
+    const normalized = normalizeLanguageCode(code);
+    const match = AZURE_LANGUAGES.find((l) => l.value === normalized);
+    return match ? match.label : normalized;
   };
 
   const getConnectionQuality = () => {
@@ -538,7 +549,7 @@ export default function ListenPortal({ params }: { params: any }) {
             <div className="grid grid-cols-2 gap-4 border-t border-white/[0.04] pt-4 text-xs">
               <div>
                 <span className="text-[9px] font-bold text-zinc-500 uppercase block">Host Source Language</span>
-                <span className="text-zinc-200 mt-0.5 block truncate">{getLanguageLabel(eventDetails?.sourceLanguage || "en-US")}</span>
+                <span className="text-zinc-200 mt-0.5 block truncate">{getLanguageLabelFromCode(eventDetails?.sourceLanguage || "en-US")}</span>
               </div>
               <div>
                 <span className="text-[9px] font-bold text-zinc-500 uppercase block">Your Translated Feed</span>
@@ -548,17 +559,14 @@ export default function ListenPortal({ params }: { params: any }) {
                   onChange={(e) => setSelectedLanguage(e.target.value)}
                   className="h-7 w-full rounded border border-white/[0.06] bg-zinc-950 px-2 py-0.5 text-xs text-zinc-300 focus:outline-none focus:border-electric-blue/50 disabled:opacity-50 mt-0.5"
                 >
-                  {eventDetails?.targetLanguages?.map((lang: string) => (
-                    <option key={lang} value={lang}>
-                      {getLanguageLabel(lang)}
-                    </option>
-                  ))}
-                  {(!eventDetails?.targetLanguages || eventDetails.targetLanguages.length === 0) && (
-                    <>
-                      <option value="es-ES">Spanish (Español)</option>
-                      <option value="zh-CN">Chinese (中文)</option>
-                      <option value="hi-IN">Hindi (हिंदी)</option>
-                    </>
+                  {eventDetails?.targetLanguages?.length > 0 ? (
+                    eventDetails.targetLanguages.map((lang: string) => (
+                      <option key={lang} value={lang}>
+                        {getLanguageLabelFromCode(lang)}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>No languages configured</option>
                   )}
                 </select>
               </div>
