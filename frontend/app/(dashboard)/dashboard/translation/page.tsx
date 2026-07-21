@@ -22,6 +22,7 @@ import { TranslationRepository } from "@/lib/database/repositories/TranslationRe
 import { EventRepository } from "@/lib/database/repositories/EventRepository";
 import { SetupProfileRepository } from "@/lib/database/repositories/SetupProfileRepository";
 import { SupabaseStreamingProvider } from "@/lib/streaming/SupabaseStreamingProvider";
+import { RecognitionRecoveryManager } from "@/lib/recovery/RecognitionRecoveryManager";
 import {
   Radio,
   Users,
@@ -209,6 +210,10 @@ export default function TranslationStudioPage() {
   const [microphoneStatus, setMicrophoneStatus] = useState("Default System Mic");
   const [speakerStatus, setSpeakerStatus] = useState("Default System Speakers");
 
+  // Recovery state
+  const [recoveryStatus, setRecoveryStatus] = useState<"idle" | "recovering" | "recovered" | "error">("idle");
+  const [lastRecoveryTime, setLastRecoveryTime] = useState<number>(0);
+
   // Azure TTS voices lookup dictionary (auto matching fallbacks)
   const [voicesList, setVoicesList] = useState<Record<string, string>>({
     "en-US": "en-US-AvaMultilingualNeural",
@@ -234,6 +239,7 @@ export default function TranslationStudioPage() {
   const speechSynthServiceRef = useRef<SpeechSynthesisService | null>(null);
   const pipelineRef = useRef<TranslationPipeline | null>(null);
   const synthesisQueueRef = useRef<SynthesisQueue | null>(null);
+  const recoveryManagerRef = useRef<RecognitionRecoveryManager | null>(null);
 
   const isVoiceEnabledRef = useRef(isVoiceEnabled);
   const voicesListRef = useRef(voicesList);
@@ -525,8 +531,69 @@ export default function TranslationStudioPage() {
 
     loadData();
 
+    // 8. Initialize Recognition Recovery Manager
+    const recoveryManager = new RecognitionRecoveryManager();
+    recoveryManagerRef.current = recoveryManager;
+
+    recoveryManager.registerCallbacks({
+      onVisibilityChange: (visible) => {
+        if (visible) {
+          setRecoveryStatus("recovering");
+          setLastRecoveryTime(Date.now());
+        }
+      },
+      onRecoveryStart: (reason) => {
+        console.log(`Recovery started: ${reason}`);
+        setRecoveryStatus("recovering");
+      },
+      onRecoveryComplete: (attempt) => {
+        if (attempt.success) {
+          setRecoveryStatus("recovered");
+          setTimeout(() => setRecoveryStatus("idle"), 3000);
+        } else {
+          setRecoveryStatus("error");
+        }
+      },
+      onAudioContextResumed: () => {
+        console.log("AudioContext resumed by recovery manager");
+      },
+      onMicReacquired: () => {
+        console.log("Microphone reacquired by recovery manager");
+      },
+      onRecognizerRestarted: () => {
+        console.log("Speech recognizer restarted by recovery manager");
+      },
+    });
+
+    recoveryManager.start({
+      recoverFn: async () => {
+        if (speechServiceRef.current && speechServiceRef.current.isRunning()) {
+          return await speechServiceRef.current.recoverAfterTabSwitch();
+        }
+        return false;
+      },
+      reacquireMicFn: async () => {
+        try {
+          const constraints: MediaStreamConstraints = {
+            audio: inputDevice !== "default" ? { deviceId: { exact: inputDevice } } : true,
+          };
+          return await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {
+          console.warn("Failed to reacquire microphone:", err);
+          return null;
+        }
+      },
+      resumeAudioFn: async () => {
+        // AudioContext resume is handled by the recovery manager internally
+      },
+    });
+
     // Clean up connections on leave
     return () => {
+      if (recoveryManagerRef.current) {
+        recoveryManagerRef.current.stop();
+        recoveryManagerRef.current = null;
+      }
       if (speechServiceRef.current) {
         speechServiceRef.current.stop();
       }
@@ -630,8 +697,9 @@ export default function TranslationStudioPage() {
       return;
     }
 
+    let micStream: MediaStream;
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
       alert("Permission denied. Ensure microphone access is allowed.");
       setRecognitionState("Error");
@@ -697,13 +765,28 @@ export default function TranslationStudioPage() {
       onError: (error) => {
         console.error("Speech Recognition Service error:", error);
       },
+      onRecovery: (event) => {
+        if (event.success) {
+          setRecoveryStatus("recovered");
+          setTimeout(() => setRecoveryStatus("idle"), 3000);
+        } else {
+          setRecoveryStatus("error");
+        }
+      },
     });
 
     speechServiceRef.current = service;
     try {
       await service.start();
+
+      // Provide mic stream to recovery manager
+      if (recoveryManagerRef.current) {
+        recoveryManagerRef.current.setMediaStream(micStream);
+      }
     } catch (err) {
       console.error("Failed to start speech service:", err);
+      // Clean up mic on failure
+      micStream.getTracks().forEach((t) => t.stop());
     }
   };
 
@@ -711,6 +794,10 @@ export default function TranslationStudioPage() {
     if (speechServiceRef.current) {
       await speechServiceRef.current.stop();
       speechServiceRef.current = null;
+    }
+    // Clean up mic stream and notify recovery manager
+    if (recoveryManagerRef.current) {
+      recoveryManagerRef.current.setMediaStream(null);
     }
     setInterimText("");
     setIsListening(false);
@@ -1171,9 +1258,39 @@ export default function TranslationStudioPage() {
           onClick={() => setStudioStage("setup")}
           className="h-8 px-3 rounded-lg border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 text-[10px] font-bold text-zinc-300 flex items-center gap-1.5 transition-all cursor-pointer"
         >
-          <span>⚙ Pre-Flight & Diagnostics</span>
+          <span>Pre-Flight & Diagnostics</span>
         </button>
       </div>
+
+      {/* Recovery Status Banner */}
+      {recoveryStatus !== "idle" && (
+        <div className={`flex items-center justify-center gap-2 p-2 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
+          recoveryStatus === "recovering"
+            ? "bg-amber-500/10 border border-amber-500/20 text-amber-400"
+            : recoveryStatus === "recovered"
+            ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+            : "bg-red-500/10 border border-red-500/20 text-red-400"
+        }`}>
+          {recoveryStatus === "recovering" && (
+            <>
+              <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+              Recovering recognition after tab switch...
+            </>
+          )}
+          {recoveryStatus === "recovered" && (
+            <>
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              Recognition recovered successfully
+            </>
+          )}
+          {recoveryStatus === "error" && (
+            <>
+              <span className="h-2 w-2 rounded-full bg-red-400" />
+              Recognition recovery failed. Please restart mic.
+            </>
+          )}
+        </div>
+      )}
 
       {/* Top Workspace Header */}
       <TranslationHeader
