@@ -9,6 +9,7 @@ type MetricsCallback = (metrics: {
   queueSize: number;
   activeVoice: string;
 }) => void;
+type AudioCompleteCallback = (msg: SpeechMessage) => void;
 
 export class SynthesisQueue {
   private service: SpeechSynthesisService;
@@ -25,6 +26,7 @@ export class SynthesisQueue {
   private onMessageUpdate: MessageUpdateCallback = () => {};
   private onQueueChange: QueueChangeCallback = () => {};
   private onMetricsUpdate: MetricsCallback = () => {};
+  private onAudioComplete: AudioCompleteCallback = () => {};
 
   constructor(service: SpeechSynthesisService) {
     this.service = service;
@@ -38,10 +40,12 @@ export class SynthesisQueue {
     onMessageUpdate?: MessageUpdateCallback;
     onQueueChange?: QueueChangeCallback;
     onMetricsUpdate?: MetricsCallback;
+    onAudioComplete?: AudioCompleteCallback;
   }) {
     if (callbacks.onMessageUpdate) this.onMessageUpdate = callbacks.onMessageUpdate;
     if (callbacks.onQueueChange) this.onQueueChange = callbacks.onQueueChange;
     if (callbacks.onMetricsUpdate) this.onMetricsUpdate = callbacks.onMetricsUpdate;
+    if (callbacks.onAudioComplete) this.onAudioComplete = callbacks.onAudioComplete;
   }
 
   getQueue(): SpeechMessage[] {
@@ -146,6 +150,10 @@ export class SynthesisQueue {
 
         this.totalLatency += result.latency;
         this.spokenCount++;
+
+        if (result.audioData) {
+          this.safeNotifyAudioComplete(msg);
+        }
       } catch (err) {
         console.error("Speech Synthesis failed for item:", msg.id, err);
         msg.status = "Failed";
@@ -194,6 +202,12 @@ export class SynthesisQueue {
   private safeNotifyMetrics() {
     try { this.notifyMetrics(); } catch (err) {
       console.warn("SynthesisQueue: onMetricsUpdate callback error:", err);
+    }
+  }
+
+  private safeNotifyAudioComplete(msg: SpeechMessage) {
+    try { this.onAudioComplete(msg); } catch (err) {
+      console.warn("SynthesisQueue: onAudioComplete callback error:", err);
     }
   }
 }

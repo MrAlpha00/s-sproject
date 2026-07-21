@@ -21,6 +21,8 @@ import {
   Database,
   Volume1,
   Maximize2,
+  Share2,
+  Link2,
 } from "lucide-react";
 import { createClient } from "@/supabase/client";
 import { SupabaseStreamingProvider } from "@/lib/streaming/SupabaseStreamingProvider";
@@ -72,6 +74,11 @@ export default function ListenPortal({ params }: { params: any }) {
   // Subtitles / translated feeds
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
   const providerRef = useRef<SupabaseStreamingProvider | null>(null);
+
+  // SessionStorage persistence for messages (24hr expiry)
+  const STORAGE_KEY = `aethervox-listener-messages-${eventId}`;
+  const STORAGE_EXPIRY_KEY = `aethervox-listener-expiry-${eventId}`;
+  const STORAGE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
   // Load Event and Session Details on mount
   useEffect(() => {
@@ -145,6 +152,21 @@ export default function ListenPortal({ params }: { params: any }) {
     }
 
     loadEventInfo();
+
+    // Load persisted messages from sessionStorage (if not expired)
+    try {
+      const expiry = localStorage.getItem(STORAGE_EXPIRY_KEY);
+      if (expiry && Date.now() < Number(expiry)) {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored) as BroadcastMessage[];
+          setMessages(parsed);
+        }
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_EXPIRY_KEY);
+      }
+    } catch {}
 
     async function checkActiveSession() {
       try {
@@ -232,6 +254,16 @@ export default function ListenPortal({ params }: { params: any }) {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [joined]);
+
+  // Persist messages to sessionStorage with 24hr expiry
+  useEffect(() => {
+    if (messages.length > 0) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+        localStorage.setItem(STORAGE_EXPIRY_KEY, String(Date.now() + STORAGE_EXPIRY_MS));
+      } catch {}
+    }
+  }, [messages, STORAGE_KEY, STORAGE_EXPIRY_KEY]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -436,6 +468,25 @@ export default function ListenPortal({ params }: { params: any }) {
     return match ? match.label : normalized;
   };
 
+  const handleShareLink = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${eventDetails?.name || "AetherVOX"} - Live Translation`,
+          text: `Listen to live translation: ${eventDetails?.name}`,
+          url,
+        });
+      } catch {}
+    } else {
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {}
+    }
+  };
+
   const getConnectionQuality = () => {
     if (streamingStatus === "disconnected") return "disconnected";
     if (streamingStatus === "connecting") return "reconnecting";
@@ -509,6 +560,24 @@ export default function ListenPortal({ params }: { params: any }) {
 
         {/* Dynamic connection and listener statuses */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleShareLink}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-zinc-900/60 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-zinc-400 hover:text-electric-blue hover:border-electric-blue/30 transition-all cursor-pointer"
+            title="Share or copy broadcast link"
+          >
+            {copied ? (
+              <>
+                <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                <span className="text-emerald-400">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="h-3 w-3" />
+                <span>Share</span>
+              </>
+            )}
+          </button>
+
           <div className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
             joined && streamingStatus === "connected"
               ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/5"
@@ -586,7 +655,8 @@ export default function ListenPortal({ params }: { params: any }) {
               ) : (
                 <div className="space-y-3.5">
                   {messages.map((msg, idx) => {
-                    const text = msg.translatedText[selectedLanguage] || msg.originalText;
+                    const translatedText = msg.translatedText[selectedLanguage];
+                    const originalText = msg.originalText;
                     const isLast = idx === messages.length - 1;
 
                     return (
@@ -596,12 +666,24 @@ export default function ListenPortal({ params }: { params: any }) {
                         animate={{ opacity: 1, y: 0 }}
                         className={`space-y-1 ${isLast ? "border-l-2 border-electric-blue pl-2.5" : "pl-3 text-zinc-400"}`}
                       >
-                        <span className="text-[8px] text-zinc-500 block font-mono">
-                          {new Date(msg.timestamp).toLocaleTimeString()}
-                        </span>
-                        <p className={`text-xs leading-relaxed ${isLast ? "text-white font-semibold text-sm animate-pulse-subtle" : ""}`}>
-                          {text}
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[8px] text-zinc-500 font-mono">
+                            {new Date(msg.timestamp).toLocaleTimeString()}
+                          </span>
+                          <span className="text-[8px] text-zinc-600 font-mono">
+                            {msg.voice?.split("-").slice(-1)[0] || ""}
+                          </span>
+                        </div>
+                        {translatedText && (
+                          <p className={`text-xs leading-relaxed ${isLast ? "text-white font-semibold text-sm" : ""}`}>
+                            {translatedText}
+                          </p>
+                        )}
+                        {originalText && originalText !== translatedText && (
+                          <p className="text-[10px] text-zinc-500 leading-relaxed italic">
+                            {originalText}
+                          </p>
+                        )}
                       </motion.div>
                     );
                   })}
