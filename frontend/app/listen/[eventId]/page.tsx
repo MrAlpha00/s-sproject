@@ -664,26 +664,51 @@ export default function ListenPortal({ params }: { params: any }) {
                         key={msg.id}
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`space-y-1 ${isLast ? "border-l-2 border-electric-blue pl-2.5" : "pl-3 text-zinc-400"}`}
+                        className={`rounded-lg border p-3 space-y-2 transition-all ${
+                          isLast
+                            ? "border-electric-blue/30 bg-electric-blue/5 shadow-[0_0_8px_rgba(0,212,255,0.06)]"
+                            : "border-white/[0.04] bg-zinc-950/30"
+                        }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[8px] text-zinc-500 font-mono">
-                            {new Date(msg.timestamp).toLocaleTimeString()}
-                          </span>
-                          <span className="text-[8px] text-zinc-600 font-mono">
-                            {msg.voice?.split("-").slice(-1)[0] || ""}
-                          </span>
-                        </div>
-                        {translatedText && (
-                          <p className={`text-xs leading-relaxed ${isLast ? "text-white font-semibold text-sm" : ""}`}>
-                            {translatedText}
-                          </p>
-                        )}
-                        {originalText && originalText !== translatedText && (
-                          <p className="text-[10px] text-zinc-500 leading-relaxed italic">
+                        {/* Original sentence */}
+                        <div className="flex items-start gap-2">
+                          <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-wider mt-0.5 shrink-0">Original</span>
+                          <p className="text-[11px] text-zinc-400 leading-relaxed italic">
                             {originalText}
                           </p>
+                        </div>
+
+                        {/* Translated sentence */}
+                        {translatedText && (
+                          <div className="flex items-start gap-2 border-t border-white/[0.03] pt-2">
+                            <span className="text-[8px] font-bold text-accent-purple uppercase tracking-wider mt-0.5 shrink-0">
+                              {getLanguageLabelFromCode(selectedLanguage)}
+                            </span>
+                            <p className={`text-xs leading-relaxed ${isLast ? "text-white font-semibold" : "text-zinc-200"}`}>
+                              {translatedText}
+                            </p>
+                          </div>
                         )}
+
+                        {/* Voice + timestamp + playback status */}
+                        <div className="flex items-center justify-between border-t border-white/[0.03] pt-2 text-[8px] text-zinc-500 font-mono">
+                          <div className="flex items-center gap-2">
+                            {msg.voice && (
+                              <span className="flex items-center gap-1">
+                                <Volume2 className="h-2.5 w-2.5 text-electric-blue" />
+                                <span>{msg.voice.split("-").slice(-1)[0]}</span>
+                              </span>
+                            )}
+                            <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                          </div>
+                          <span className={`px-1.5 py-0.5 rounded border font-bold uppercase ${
+                            joined && streamingStatus === "connected"
+                              ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/5"
+                              : "text-zinc-500 border-white/[0.04] bg-zinc-950/40"
+                          }`}>
+                            {joined && streamingStatus === "connected" ? "Playing Live" : "Awaiting"}
+                          </span>
+                        </div>
                       </motion.div>
                     );
                   })}

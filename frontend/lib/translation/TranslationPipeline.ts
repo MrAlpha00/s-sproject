@@ -154,6 +154,10 @@ export class TranslationPipeline {
 
             this.totalTranslationTime += msg.translationLatency;
             this.processedCount++;
+
+            // Notify UI of translated text BEFORE triggering TTS,
+            // so SynthesisQueue's onMessageUpdate can match msg.text against transcripts
+            this.safeNotifyMessageUpdate(msg);
             
             // Invoke completed hook if registered
             if (this.onCompleteCallback) {
@@ -173,6 +177,9 @@ export class TranslationPipeline {
             success = true;
             this.totalTranslationTime += msg.translationLatency;
             this.processedCount++;
+
+            // Notify UI of translated text BEFORE triggering TTS
+            this.safeNotifyMessageUpdate(msg);
 
             if (this.onCompleteCallback) {
               try {

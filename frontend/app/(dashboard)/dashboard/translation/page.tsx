@@ -379,6 +379,37 @@ export default function TranslationStudioPage() {
         },
       });
 
+      // Register pipeline completion handler: enqueue TTS + broadcast translation
+      pipeline.registerOnComplete((msg) => {
+        if (isVoiceEnabledRef.current) {
+          msg.targetLanguage.forEach((langCode) => {
+            const text = msg.translatedText[langCode];
+            if (text) {
+              const voiceName = voicesListRef.current[langCode] || "en-US-AvaMultilingualNeural";
+              if (synthesisQueueRef.current) {
+                synthesisQueueRef.current.enqueue(text, langCode, voiceName);
+              }
+            }
+          });
+        }
+
+        // Broadcast translation message over Supabase Realtime
+        if (activeSessionRef.current && streamingServiceRef.current) {
+          streamingServiceRef.current.broadcastTranslation({
+            id: msg.id,
+            sessionId: activeSessionRef.current.id,
+            eventId: selectedEventIdRef.current,
+            originalText: msg.originalText,
+            translatedText: msg.translatedText,
+            sourceLanguage: msg.sourceLanguage,
+            targetLanguages: msg.targetLanguage,
+            voice: voiceProfileRef.current,
+            latency: msg.translationLatency,
+          });
+          setMessagesBroadcasted((prev) => prev + 1);
+        }
+      });
+
       // 4. Preload Azure voice lists dynamically
       try {
         const preloaded = await synthService.preloadVoices();
@@ -621,40 +652,6 @@ export default function TranslationStudioPage() {
   useEffect(() => { isVoiceEnabledRef.current = isVoiceEnabled; }, [isVoiceEnabled]);
   useEffect(() => { voicesListRef.current = voicesList; }, [voicesList]);
   useEffect(() => { voiceProfileRef.current = voiceProfile; }, [voiceProfile]);
-
-  // Hook pipeline completions to audio synthesis enqueuer (register once, read refs)
-  useEffect(() => {
-    if (!pipelineRef.current) return;
-    pipelineRef.current.registerOnComplete((msg) => {
-      if (isVoiceEnabledRef.current) {
-        msg.targetLanguage.forEach((langCode) => {
-          const text = msg.translatedText[langCode];
-          if (text) {
-            const voiceName = voicesListRef.current[langCode] || "en-US-AvaMultilingualNeural";
-            if (synthesisQueueRef.current) {
-              synthesisQueueRef.current.enqueue(text, langCode, voiceName);
-            }
-          }
-        });
-      }
-
-      // Broadcast translation message over Supabase Realtime
-      if (activeSessionRef.current && streamingServiceRef.current) {
-        streamingServiceRef.current.broadcastTranslation({
-          id: msg.id,
-          sessionId: activeSessionRef.current.id,
-          eventId: selectedEventIdRef.current,
-          originalText: msg.originalText,
-          translatedText: msg.translatedText,
-          sourceLanguage: msg.sourceLanguage,
-          targetLanguages: msg.targetLanguage,
-          voice: voiceProfileRef.current,
-          latency: msg.translationLatency,
-        });
-        setMessagesBroadcasted((prev) => prev + 1);
-      }
-    });
-  }, []);
 
   // Transcripts handlers
   const handleClearTranscripts = () => {
