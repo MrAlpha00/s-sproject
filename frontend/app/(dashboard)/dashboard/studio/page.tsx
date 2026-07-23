@@ -233,7 +233,7 @@ export default function LiveOperatorStudioPage() {
 
       synthesisQueue.registerCallbacks({
         onMessageUpdate: (msg) => {
-          console.log(`[Studio] SynthesisQueue onMessageUpdate: msg=${msg.id} status=${msg.status} voice=${msg.voice} latency=${msg.latency} hasAudio=${!!msg.audioData}`);
+          console.log(`[Audio] SynthesisQueue onMessageUpdate: msg=${msg.id} status=${msg.status} voice=${msg.voice} latency=${msg.latency} hasAudio=${!!msg.audioData}`);
           setTranscripts((prev) => {
             const matched = prev.find((t) =>
               Object.values(t.translatedText).includes(msg.text)
@@ -259,7 +259,7 @@ export default function LiveOperatorStudioPage() {
           });
 
           if (msg.status === "Completed" && msg.audioData && activeSessionRef.current && streamingServiceRef.current) {
-            console.log(`[Studio] Broadcasting audio for msg ${msg.id}: bytes=${msg.audioData.length} lang=${msg.language}`);
+            console.log(`[Audio] Broadcasting audio for msg ${msg.id}: bytes=${msg.audioData.length} lang=${msg.language}`);
             streamingServiceRef.current.broadcastAudio({
               sessionId: activeSessionRef.current.id,
               eventId: selectedEventIdRef.current,
@@ -271,11 +271,11 @@ export default function LiveOperatorStudioPage() {
               sequenceNumber: ++sequenceNumberRef.current,
             });
           } else if (msg.status === "Completed" && !msg.audioData) {
-            console.warn(`[Studio] Synthesis completed but no audioData for msg ${msg.id}`);
+            console.warn(`[Audio] Synthesis completed but no audioData for msg ${msg.id}`);
           }
         },
         onMetricsUpdate: (metrics) => {
-          console.log(`[Studio] SynthesisQueue metrics: queue=${metrics.queueSize} spoken=${metrics.spokenCount} latency=${metrics.averageSynthesisLatency}ms voice=${metrics.activeVoice}`);
+          console.log(`[Audio] SynthesisQueue metrics: queue=${metrics.queueSize} spoken=${metrics.spokenCount} latency=${metrics.averageSynthesisLatency}ms voice=${metrics.activeVoice}`);
           setSynthesisLatency(`${metrics.averageSynthesisLatency}ms`);
           setVoiceQueueCount(metrics.queueSize);
           setMessagesSpoken(metrics.spokenCount);
@@ -284,7 +284,7 @@ export default function LiveOperatorStudioPage() {
       });
 
       pipeline.registerOnComplete((msg) => {
-        console.log(`[Studio] onCompleteCallback fired for msg ${msg.id}:`, {
+        console.log(`[Audio] onCompleteCallback fired for msg ${msg.id}:`, {
           targetLanguages: msg.targetLanguage,
           translatedTextKeys: Object.keys(msg.translatedText),
           isVoiceEnabled: isVoiceEnabledRef.current,
@@ -295,13 +295,13 @@ export default function LiveOperatorStudioPage() {
           msg.targetLanguage.forEach((langCode) => {
             const text = msg.translatedText[langCode];
             const voiceName = voicesListRef.current[langCode] || "en-US-AvaMultilingualNeural";
-            console.log(`[Studio] TTS enqueue attempt: lang=${langCode} text="${text?.substring(0, 40)}" voice=${voiceName} queueRef=${!!synthesisQueueRef.current}`);
+            console.log(`[Audio] TTS enqueue attempt: lang=${langCode} text="${text?.substring(0, 40)}" voice=${voiceName} queueRef=${!!synthesisQueueRef.current}`);
             if (text && synthesisQueueRef.current) {
               synthesisQueueRef.current.enqueue(text, langCode, voiceName);
             }
           });
         } else {
-          console.log("[Studio] Voice disabled — skipping TTS enqueue");
+          console.log("[Audio] Voice disabled — skipping TTS enqueue");
         }
 
         if (activeSessionRef.current && streamingServiceRef.current) {
@@ -407,16 +407,61 @@ export default function LiveOperatorStudioPage() {
   }, [configLoaded]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const synthState = window.speechSynthesis ? (window.speechSynthesis.paused ? "paused" : "ready") : "unavailable";
+      console.log(`[Audio] Initial state: speechSynthesis=${synthState}`);
+    }
+  }, []);
+
+  useEffect(() => {
     if (outputDevice && synthesisQueueRef.current) {
       synthesisQueueRef.current.setDeviceId(outputDevice === "default" ? null : outputDevice);
     }
   }, [outputDevice]);
+
+  const unlockAudio = useCallback(async () => {
+    console.log("[Audio] unlockAudio: attempting to resume AudioContext and speechSynthesis");
+    try {
+      if (typeof window !== "undefined") {
+        // Resume window.speechSynthesis if suspended
+        if (window.speechSynthesis && window.speechSynthesis.speaking === false && window.speechSynthesis.paused) {
+          console.log("[Audio] window.speechSynthesis is paused, calling resume()");
+          window.speechSynthesis.resume();
+        }
+
+        // Create and resume a silent AudioContext to unlock browser audio output
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          console.log(`[Audio] AudioContext state=${ctx.state}`);
+          if (ctx.state === "suspended") {
+            await ctx.resume();
+            console.log(`[Audio] AudioContext resumed, state=${ctx.state}`);
+          }
+          // Play a silent buffer to fully unlock
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.start(0);
+          console.log("[Audio] Silent buffer played to unlock audio output");
+          // Close context after unlock (it stays unlocked for the page session)
+          setTimeout(() => { try { ctx.close(); } catch {} }, 100);
+        }
+      }
+    } catch (err) {
+      console.warn("[Audio] unlockAudio failed:", err);
+    }
+  }, []);
 
   const handleStartListening = async () => {
     if (!isAzureConfigured || !azureToken || !azureRegion) {
       alert("Cannot start: Azure Speech credentials are not configured.");
       return;
     }
+
+    console.log("[Audio] handleStartListening: unlocking audio before mic start");
+    await unlockAudio();
 
     let micStream: MediaStream;
     try {
@@ -534,6 +579,9 @@ export default function LiveOperatorStudioPage() {
   const handleStartSession = async () => {
     if (!streamingServiceRef.current) return;
     try {
+      console.log("[Audio] handleStartSession: unlocking audio");
+      await unlockAudio();
+
       const supabase = createClient();
       const { data: userRes } = await supabase.auth.getUser();
       const userId = userRes?.user?.id || "usr-admin-001";
@@ -622,6 +670,7 @@ export default function LiveOperatorStudioPage() {
 
   const handleReplaySpeechItem = (text: string, langCode: string) => {
     const voiceName = voicesList[langCode] || "en-US-AvaMultilingualNeural";
+    console.log(`[Audio] handleReplaySpeechItem: lang=${langCode} text="${text.substring(0, 40)}"`);
     if (synthesisQueueRef.current) {
       synthesisQueueRef.current.enqueue(text, langCode, voiceName);
     }
@@ -629,6 +678,7 @@ export default function LiveOperatorStudioPage() {
 
   const handlePlaySpeechItem = (text: string, langCode: string) => {
     const voiceName = voicesList[langCode] || "en-US-AvaMultilingualNeural";
+    console.log(`[Audio] handlePlaySpeechItem: lang=${langCode} text="${text.substring(0, 40)}"`);
     if (synthesisQueueRef.current) {
       synthesisQueueRef.current.enqueue(text, langCode, voiceName);
     }
