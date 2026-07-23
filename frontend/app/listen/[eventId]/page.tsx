@@ -74,6 +74,9 @@ export default function ListenPortal({ params }: { params: any }) {
   // Subtitles / translated feeds
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
   const providerRef = useRef<SupabaseStreamingProvider | null>(null);
+  const [autoPlayEnabled, setAutoPlayEnabled] = useState(true);
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const autoPlayRef = useRef(true);
 
   // SessionStorage persistence for messages (24hr expiry)
   const STORAGE_KEY = `aethervox-listener-messages-${eventId}`;
@@ -304,6 +307,10 @@ export default function ListenPortal({ params }: { params: any }) {
         setBufferState(streamManager.getBufferState());
         setVolume(streamManager.getVolume());
         setMute(streamManager.getMute());
+        const state = streamManager.getPlaybackState();
+        if (state === "idle" || state === "stopped") {
+          setActiveMessageId(null);
+        }
       });
 
       // 3. Retrieve session ID
@@ -355,6 +362,10 @@ export default function ListenPortal({ params }: { params: any }) {
           if (audioTime < joinTimeRef.current) return;
 
           if (audio.language === joinLanguage && audio.audioData) {
+            setActiveMessageId(audio.messageId);
+
+            if (!autoPlayRef.current) return;
+
             // Sequence tracking & duplicate filtering
             const orderedPackets = syncManager.processIncomingPacket({
               sessionId: audio.sessionId,
@@ -446,6 +457,17 @@ export default function ListenPortal({ params }: { params: any }) {
     if (!streamManagerRef.current) return;
     const curMute = streamManagerRef.current.getMute();
     streamManagerRef.current.setMute(!curMute);
+  };
+
+  const handleToggleAutoPlay = () => {
+    setAutoPlayEnabled((prev) => {
+      const next = !prev;
+      autoPlayRef.current = next;
+      if (!next && streamManagerRef.current) {
+        streamManagerRef.current.pause();
+      }
+      return next;
+    });
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -665,8 +687,10 @@ export default function ListenPortal({ params }: { params: any }) {
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
                         className={`rounded-lg border p-3 space-y-2 transition-all ${
-                          isLast
-                            ? "border-electric-blue/30 bg-electric-blue/5 shadow-[0_0_8px_rgba(0,212,255,0.06)]"
+                          activeMessageId === msg.id
+                            ? "border-electric-blue/40 bg-electric-blue/8 shadow-[0_0_12px_rgba(0,212,255,0.08)]"
+                            : isLast
+                            ? "border-electric-blue/20 bg-electric-blue/3"
                             : "border-white/[0.04] bg-zinc-950/30"
                         }`}
                       >
@@ -684,29 +708,38 @@ export default function ListenPortal({ params }: { params: any }) {
                             <span className="text-[8px] font-bold text-accent-purple uppercase tracking-wider mt-0.5 shrink-0">
                               {getLanguageLabelFromCode(selectedLanguage)}
                             </span>
-                            <p className={`text-xs leading-relaxed ${isLast ? "text-white font-semibold" : "text-zinc-200"}`}>
+                            <p className={`text-xs leading-relaxed ${activeMessageId === msg.id ? "text-white font-semibold" : isLast ? "text-zinc-100 font-medium" : "text-zinc-200"}`}>
                               {translatedText}
                             </p>
                           </div>
                         )}
 
-                        {/* Voice + timestamp + playback status */}
+                        {/* Voice + timestamp + latency + playback status */}
                         <div className="flex items-center justify-between border-t border-white/[0.03] pt-2 text-[8px] text-zinc-500 font-mono">
                           <div className="flex items-center gap-2">
                             {msg.voice && (
                               <span className="flex items-center gap-1">
-                                <Volume2 className="h-2.5 w-2.5 text-electric-blue" />
+                                {activeMessageId === msg.id ? (
+                                  <Volume2 className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
+                                ) : (
+                                  <Volume2 className="h-2.5 w-2.5 text-electric-blue" />
+                                )}
                                 <span>{msg.voice.split("-").slice(-1)[0]}</span>
                               </span>
+                            )}
+                            {msg.latency && (
+                              <span className="text-accent-purple">{msg.latency}ms</span>
                             )}
                             <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
                           </div>
                           <span className={`px-1.5 py-0.5 rounded border font-bold uppercase ${
-                            joined && streamingStatus === "connected"
-                              ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/5"
+                            activeMessageId === msg.id
+                              ? "text-emerald-400 border-emerald-500/25 bg-emerald-500/10"
+                              : joined && streamingStatus === "connected"
+                              ? "text-zinc-400 border-white/[0.06] bg-zinc-900/60"
                               : "text-zinc-500 border-white/[0.04] bg-zinc-950/40"
                           }`}>
-                            {joined && streamingStatus === "connected" ? "Playing Live" : "Awaiting"}
+                            {activeMessageId === msg.id ? "Playing" : joined && streamingStatus === "connected" ? "Queued" : "Awaiting"}
                           </span>
                         </div>
                       </motion.div>
@@ -835,6 +868,26 @@ export default function ListenPortal({ params }: { params: any }) {
                 />
               </div>
             </div>
+
+            {/* Auto-play indicator */}
+            {joined && (
+              <div
+                onClick={handleToggleAutoPlay}
+                className="flex items-center justify-between border-t border-white/[0.04] pt-3 text-xs cursor-pointer hover:bg-zinc-950/30 -mx-1 px-1 py-1 rounded transition-colors"
+              >
+                <span className="text-zinc-400 flex items-center gap-1.5">
+                  <Radio className="h-3.5 w-3.5 text-zinc-650" />
+                  <span>Auto-Play Audio</span>
+                </span>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border transition-all ${
+                  autoPlayEnabled
+                    ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/5"
+                    : "text-zinc-500 border-white/[0.04] bg-zinc-950/40"
+                }`}>
+                  {autoPlayEnabled ? "ON" : "OFF"}
+                </span>
+              </div>
+            )}
 
             {/* Interaction controls */}
             <div className="grid grid-cols-2 gap-2 pt-1">

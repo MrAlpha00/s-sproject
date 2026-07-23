@@ -1,49 +1,28 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useEvents } from "@/providers/EventProvider";
-import { TranslationHeader } from "@/components/translation/TranslationHeader";
 import { TranslationConfigPanel, PoolOption } from "@/components/translation/TranslationConfigPanel";
-import { TranslationPreview, SpeechStatusInfo } from "@/components/translation/TranslationPreview";
-import { SessionControls } from "@/components/translation/SessionControls";
-import { AIStatusPanel } from "@/components/translation/AIStatusPanel";
 import { getSpeechToken } from "@/app/(dashboard)/dashboard/settings/azure/actions";
-import { SpeechRecognitionService, SpeechState } from "@/lib/azure/services/SpeechRecognitionService";
-import { TranslationPipeline } from "@/lib/translation/TranslationPipeline";
-import { SpeechSynthesisService } from "@/lib/azure/services/SpeechSynthesisService";
-import { SynthesisQueue } from "@/lib/audio/SynthesisQueue";
-import { TranslationMessage } from "@/types/translation";
 import { AZURE_LANGUAGES } from "@/lib/azure/constants";
 import { normalizeLanguageCode, normalizeLanguageCodes } from "@/lib/languages";
 import { createClient } from "@/supabase/client";
 import { VoiceRepository } from "@/lib/database/repositories/VoiceRepository";
 import { VoiceProfileRepository } from "@/lib/database/repositories/VoiceProfileRepository";
-import { TranslationRepository } from "@/lib/database/repositories/TranslationRepository";
 import { EventRepository } from "@/lib/database/repositories/EventRepository";
 import { SetupProfileRepository } from "@/lib/database/repositories/SetupProfileRepository";
-import { SupabaseStreamingProvider } from "@/lib/streaming/SupabaseStreamingProvider";
-import { RecognitionRecoveryManager } from "@/lib/recovery/RecognitionRecoveryManager";
 import {
-  Radio,
-  Users,
-  QrCode,
-  Copy,
-  Check,
-  Pause,
-  Play,
-  Square,
-  RefreshCw,
-  ExternalLink,
-  CheckCircle2,
-  AlertCircle,
   ArrowRight,
   ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 export default function TranslationStudioPage() {
+  const router = useRouter();
   const { events } = useEvents();
 
-  // Dynamic pools
   const [languagesPool] = useState<PoolOption[]>(AZURE_LANGUAGES);
   const [voiceProfilesPool, setVoiceProfilesPool] = useState<string[]>([
     "Enterprise Voice Male A (Cloned)",
@@ -58,17 +37,12 @@ export default function TranslationStudioPage() {
     { value: "default", label: "Default System Audio Output" }
   ]);
 
-  // Providers & toggles
   const [speechProvider, setSpeechProvider] = useState("azure");
   const [translationProvider, setTranslationProvider] = useState("azure-translator");
   const [outputVoiceEngine, setOutputVoiceEngine] = useState("azure-tts");
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
   const [recordingEnabled, setRecordingEnabled] = useState(false);
 
-  // Studio Stage Workflow
-  const [studioStage, setStudioStage] = useState<"setup" | "live">("setup");
-
-  // Selections
   const [selectedEventId, setSelectedEventId] = useState("manual");
   const [sourceLanguage, setSourceLanguage] = useState("en-US");
   const [targetLanguages, setTargetLanguages] = useState<string[]>([]);
@@ -77,358 +51,26 @@ export default function TranslationStudioPage() {
   const [latencyMode, setLatencyMode] = useState<"low-latency" | "standard" | "high-fidelity">("low-latency");
   const [profanityFilter, setProfanityFilter] = useState(true);
   const [targetVocabulary, setTargetVocabulary] = useState("");
-  
+
   const [inputDevice, setInputDevice] = useState("default");
   const [outputDevice, setOutputDevice] = useState("default");
 
-  // Connection & session states
   const [isAzureConfigured, setIsAzureConfigured] = useState(false);
-  const [azureToken, setAzureToken] = useState("");
-  const [azureRegion, setAzureRegion] = useState("");
-  
-  // Real-time Pipeline States
-  const [isListening, setIsListening] = useState(false);
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
-  const [transcripts, setTranscripts] = useState<TranslationMessage[]>([]);
-  const [interimText, setInterimText] = useState("");
-  const [recognitionState, setRecognitionState] = useState<SpeechState>("Idle");
-
-  // Speech status logs mapping
-  const [speechStatuses, setSpeechStatuses] = useState<Record<string, SpeechStatusInfo>>({});
-
-  // Live Streaming States
-  const streamingServiceRef = useRef<SupabaseStreamingProvider | null>(null);
-  const [isStreamingActive, setIsStreamingActive] = useState(false);
-  const [streamingSession, setStreamingSession] = useState<any>(null);
-  const [audienceCount, setAudienceCount] = useState(0);
-  const [messagesBroadcasted, setMessagesBroadcasted] = useState(0);
-  const [streamingStatus, setStreamingStatus] = useState<string>("idle");
-  const [sessionState, setSessionState] = useState<string>("idle");
-  const [copied, setCopied] = useState(false);
-  const sequenceNumberRef = useRef(0);
-  const activeSessionRef = useRef<any>(null);
-
-  const selectedEventIdRef = useRef(selectedEventId);
-  useEffect(() => {
-    selectedEventIdRef.current = selectedEventId;
-  }, [selectedEventId]);
-
-  // Restore active studio session state from sessionStorage on mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = sessionStorage.getItem("aethervox_studio_active_session");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.selectedEventId) setSelectedEventId(parsed.selectedEventId);
-          if (parsed.sourceLanguage) setSourceLanguage(parsed.sourceLanguage);
-          if (parsed.targetLanguages && Array.isArray(parsed.targetLanguages) && parsed.targetLanguages.length > 0) {
-            setTargetLanguages(parsed.targetLanguages);
-          }
-          if (parsed.voiceProfile) setVoiceProfile(parsed.voiceProfile);
-          if (parsed.inputDevice) setInputDevice(parsed.inputDevice);
-          if (parsed.outputDevice) setOutputDevice(parsed.outputDevice);
-          if (parsed.transcripts && Array.isArray(parsed.transcripts) && parsed.transcripts.length > 0) {
-            setTranscripts(parsed.transcripts);
-          }
-          if (parsed.studioStage) setStudioStage(parsed.studioStage);
-        }
-      } catch (err) {
-        console.warn("Failed to restore studio session state:", err);
-      }
-    }
-  }, []);
-
-  // Save session state to sessionStorage when active values update
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const statePayload = {
-          studioStage,
-          selectedEventId,
-          sourceLanguage,
-          targetLanguages,
-          voiceProfile,
-          inputDevice,
-          outputDevice,
-          transcripts,
-          isStreamingActive,
-          sessionState,
-        };
-        sessionStorage.setItem("aethervox_studio_active_session", JSON.stringify(statePayload));
-      } catch (err) {}
-    }
-  }, [
-    studioStage,
-    selectedEventId,
-    sourceLanguage,
-    targetLanguages,
-    voiceProfile,
-    inputDevice,
-    outputDevice,
-    transcripts,
-    isStreamingActive,
-    sessionState,
-  ]);
-
-  useEffect(() => {
-    const supabase = createClient();
-    const provider = new SupabaseStreamingProvider(supabase);
-    provider.registerStatusCallback((status) => {
-      setStreamingStatus(status);
-    });
-    provider.registerPresenceCallback((count) => {
-      setAudienceCount(count);
-    });
-    streamingServiceRef.current = provider;
-
-    return () => {
-      if (streamingServiceRef.current) {
-        streamingServiceRef.current.cleanupSession();
-      }
-    };
-  }, []);
-
-  // Latency & Metrics tracking
-  const [averageTranslationTime, setAverageTranslationTime] = useState("-- ms");
-  const [translationErrors, setTranslationErrors] = useState(0);
-  const [messagesProcessed, setMessagesProcessed] = useState(0);
-  const [translationStatus, setTranslationStatus] = useState<"Pending" | "Translating" | "Completed" | "Failed">("Pending");
-
-  // Speech TTS metrics
-  const [averageSpeechLatency, setAverageSpeechLatency] = useState("-- ms");
-  const [voiceQueueCount, setVoiceQueueCount] = useState(0);
-  const [messagesSpoken, setMessagesSpoken] = useState(0);
-  const [currentVoice, setCurrentVoice] = useState("--");
-
-  const [recognitionLatency, setRecognitionLatency] = useState("-- ms");
-  const [translationLatency, setTranslationLatency] = useState("-- ms");
-  const [synthesisLatency, setSynthesisLatency] = useState("-- ms");
-  const [totalPipelineLatency, setTotalPipelineLatency] = useState("-- ms");
-
   const [microphoneStatus, setMicrophoneStatus] = useState("Default System Mic");
-  const [speakerStatus, setSpeakerStatus] = useState("Default System Speakers");
 
-  // Recovery state
-  const [recoveryStatus, setRecoveryStatus] = useState<"idle" | "recovering" | "recovered" | "error">("idle");
-  const [lastRecoveryTime, setLastRecoveryTime] = useState<number>(0);
-
-  // Azure TTS voices lookup dictionary (auto matching fallbacks)
-  const [voicesList, setVoicesList] = useState<Record<string, string>>({
-    "en-US": "en-US-AvaMultilingualNeural",
-    "hi-IN": "hi-IN-MadhurNeural",
-    "te-IN": "te-IN-MohanNeural",
-    "kn-IN": "kn-IN-GaganNeural",
-    "ta-IN": "ta-IN-ValluvarNeural",
-    "ml-IN": "ml-IN-MidhunNeural",
-    "mr-IN": "mr-IN-ManoharNeural",
-    "gu-IN": "gu-IN-NiranjanNeural",
-    "pa-IN": "pa-IN-YashpalNeural",
-    "bn-IN": "bn-IN-BashkarNeural",
-    "ur-IN": "ur-IN-GulNeural",
-    "es-ES": "es-ES-AlvaroNeural",
-    "fr-FR": "fr-FR-HenriNeural",
-    "de-DE": "de-DE-ConradNeural",
-    "zh-CN": "zh-CN-XiaoxiaoNeural",
-    "ja-JP": "ja-JP-KeitaNeural",
-    "ko-KR": "ko-KR-InJoonNeural",
-  });
-
-  const speechServiceRef = useRef<SpeechRecognitionService | null>(null);
-  const speechSynthServiceRef = useRef<SpeechSynthesisService | null>(null);
-  const pipelineRef = useRef<TranslationPipeline | null>(null);
-  const synthesisQueueRef = useRef<SynthesisQueue | null>(null);
-  const recoveryManagerRef = useRef<RecognitionRecoveryManager | null>(null);
-
-  const isVoiceEnabledRef = useRef(isVoiceEnabled);
-  const voicesListRef = useRef(voicesList);
-  const voiceProfileRef = useRef(voiceProfile);
-
-  // Mount logic: initialize Pipeline, fetch Token, scan Devices, load Voices
   useEffect(() => {
-    // 1. Initialize translation queue pipeline
-    const pipeline = new TranslationPipeline();
-    pipelineRef.current = pipeline;
-
-    pipeline.registerCallbacks({
-      onMessageUpdate: (msg) => {
-        setTranscripts((prev) => {
-          const index = prev.findIndex((m) => m.id === msg.id);
-          if (index >= 0) {
-            const next = [...prev];
-            next[index] = msg;
-            return next;
-          }
-          return [...prev, msg];
-        });
-
-        // Async save to database if completed
-        if (msg.status === "Completed") {
-          const supabase = createClient();
-          const repo = new TranslationRepository(supabase);
-          const currentSessionId = activeSessionRef.current?.id || "session-active-001";
-          repo.create(currentSessionId, "org-aether-main", msg).catch((err) => {
-            console.warn("Failed to save translation history row to Supabase:", err);
-          });
-        }
-      },
-      onMetricsUpdate: (metrics) => {
-        setAverageTranslationTime(`${metrics.averageTranslationTime}ms`);
-        setTranslationErrors(metrics.errorsCount);
-        setMessagesProcessed(metrics.messagesProcessed);
-        setTranslationStatus(metrics.translationStatus);
-
-        const activeMsg = pipeline.getQueue().find((m) => m.status === "Completed");
-        if (activeMsg) {
-          setTranslationLatency(`${activeMsg.translationLatency}ms`);
-        }
-      },
-    });
-
     async function loadData() {
-      // 2. Fetch Azure tokens with fallback
-      let token = "mock-dev-token";
-      let region = "centralindia";
-
+      let configured = false;
       try {
         const result = await getSpeechToken();
         if (result.success && result.token && result.region) {
-          token = result.token;
-          region = result.region;
+          configured = true;
         }
       } catch (err) {
-        console.warn("Using fallback Azure configuration tokens:", err);
+        console.warn("Azure token check failed:", err);
       }
+      setIsAzureConfigured(configured);
 
-      setIsAzureConfigured(true);
-      setAzureToken(token);
-      setAzureRegion(region);
-
-      // 3. Initialize Speech Synthesis Service and Queue client-side
-      const synthService = new SpeechSynthesisService(token, region);
-      speechSynthServiceRef.current = synthService;
-
-      const synthesisQueue = new SynthesisQueue(synthService);
-      synthesisQueueRef.current = synthesisQueue;
-
-      // Connect output route device sink ID from localStorage
-      if (typeof window !== "undefined") {
-        const savedOutputId = localStorage.getItem("aethervox_active_output");
-        synthesisQueue.setDeviceId(savedOutputId);
-      }
-
-      synthesisQueue.registerCallbacks({
-        onMessageUpdate: (msg) => {
-          // Map speech synthesis state back to its translation row
-          setTranscripts((prev) => {
-            const matched = prev.find((t) =>
-              Object.values(t.translatedText).includes(msg.text)
-            );
-            if (matched) {
-              const langCode = Object.keys(matched.translatedText).find(
-                (k) => matched.translatedText[k] === msg.text
-              );
-              if (langCode) {
-                const stateKey = `${matched.id}-${langCode}`;
-                setSpeechStatuses((prevStatuses) => ({
-                  ...prevStatuses,
-                  [stateKey]: {
-                    voice: msg.voice,
-                    status: msg.status,
-                    latency: msg.latency,
-                    duration: msg.duration,
-                  },
-                }));
-              }
-            }
-            return prev;
-          });
-
-          // Broadcast audio packet over Supabase Realtime
-          if (msg.status === "Completed" && msg.audioData && activeSessionRef.current && streamingServiceRef.current) {
-            streamingServiceRef.current.broadcastAudio({
-              sessionId: activeSessionRef.current.id,
-              eventId: selectedEventIdRef.current,
-              messageId: msg.id,
-              audioData: msg.audioData,
-              language: msg.language,
-              voice: msg.voice,
-              duration: msg.duration,
-              sequenceNumber: ++sequenceNumberRef.current,
-            });
-          }
-        },
-        onMetricsUpdate: (metrics) => {
-          setAverageSpeechLatency(`${metrics.averageSynthesisLatency}ms`);
-          setVoiceQueueCount(metrics.queueSize);
-          setMessagesSpoken(metrics.spokenCount);
-          setCurrentVoice(metrics.activeVoice);
-
-          if (metrics.averageSynthesisLatency > 0) {
-            setSynthesisLatency(`${metrics.averageSynthesisLatency}ms`);
-            // Calculate dynamic total pipeline latency
-            setTranscripts((prev) => {
-              const active = prev.find((t) => t.status === "Completed");
-              if (active) {
-                setTotalPipelineLatency(`${active.recognitionLatency + active.translationLatency + metrics.averageSynthesisLatency}ms`);
-              }
-              return prev;
-            });
-          }
-        },
-      });
-
-      // Register pipeline completion handler: enqueue TTS + broadcast translation
-      pipeline.registerOnComplete((msg) => {
-        if (isVoiceEnabledRef.current) {
-          msg.targetLanguage.forEach((langCode) => {
-            const text = msg.translatedText[langCode];
-            if (text) {
-              const voiceName = voicesListRef.current[langCode] || "en-US-AvaMultilingualNeural";
-              if (synthesisQueueRef.current) {
-                synthesisQueueRef.current.enqueue(text, langCode, voiceName);
-              }
-            }
-          });
-        }
-
-        // Broadcast translation message over Supabase Realtime
-        if (activeSessionRef.current && streamingServiceRef.current) {
-          streamingServiceRef.current.broadcastTranslation({
-            id: msg.id,
-            sessionId: activeSessionRef.current.id,
-            eventId: selectedEventIdRef.current,
-            originalText: msg.originalText,
-            translatedText: msg.translatedText,
-            sourceLanguage: msg.sourceLanguage,
-            targetLanguages: msg.targetLanguage,
-            voice: voiceProfileRef.current,
-            latency: msg.translationLatency,
-          });
-          setMessagesBroadcasted((prev) => prev + 1);
-        }
-      });
-
-      // 4. Preload Azure voice lists dynamically
-      try {
-        const preloaded = await synthService.preloadVoices();
-        if (preloaded && preloaded.length > 0) {
-          setVoicesList((prevList) => {
-            const updated = { ...prevList };
-            preloaded.forEach((v) => {
-              if (v.locale) {
-                updated[v.locale] = v.shortName || v.name;
-              }
-            });
-            return updated;
-          });
-        }
-      } catch (err) {
-        console.warn("Failed preloading voices list:", err);
-      }
-
-      // 5. Scan inputs & destinations
       try {
         if (typeof navigator !== "undefined" && navigator.mediaDevices) {
           const devices = await navigator.mediaDevices.enumerateDevices();
@@ -449,10 +91,9 @@ export default function TranslationStudioPage() {
           if (outputs.length > 0) setAudioOutputsPool(outputs);
         }
       } catch (err) {
-        console.warn("Hardware enumeration failed/denied:", err);
+        console.warn("Hardware enumeration failed:", err);
       }
 
-      // 6. Load Operator Voice Profiles from db
       try {
         const supabase = createClient();
         const voiceProfileRepo = new VoiceProfileRepository(supabase);
@@ -462,15 +103,6 @@ export default function TranslationStudioPage() {
           setVoiceProfilesPool(names);
           const def = vProfiles.find((p) => p.isDefault) || vProfiles[0];
           setVoiceProfile(def.profileName);
-          
-          const defaultMappings = vProfiles.filter((p) => p.profileName === def.profileName);
-          setVoicesList((prev) => {
-            const updated = { ...prev };
-            defaultMappings.forEach((m) => {
-              updated[m.language] = m.voiceName;
-            });
-            return updated;
-          });
         } else {
           const voiceRepo = new VoiceRepository(supabase);
           const voices = await voiceRepo.findAll();
@@ -483,7 +115,6 @@ export default function TranslationStudioPage() {
         console.warn("Could not query voice profiles:", err);
       }
 
-      // 7. Load Event Setup configuration from sessionStorage or database
       try {
         if (typeof window !== "undefined") {
           const params = new URLSearchParams(window.location.search);
@@ -505,8 +136,6 @@ export default function TranslationStudioPage() {
                 sourceLanguage: normalizeLanguageCode(profile.sourceLanguage || "en-US"),
                 targetLanguages: normalizeLanguageCodes(profile.targetLanguages || []),
                 voiceSelection: profile.voiceSelection || {},
-                azureRegion: profile.azureRegion,
-                audioSettings: profile.audioSettings || {},
               };
             }
           } else if (eventId) {
@@ -523,8 +152,6 @@ export default function TranslationStudioPage() {
                 sourceLanguage: normalizedSource,
                 targetLanguages: normalizedTargets,
                 voiceSelection: event.voiceProfile ? { [normalizedTargets[0] || "en-US"]: event.voiceProfile } : {},
-                azureRegion: "centralindia",
-                audioSettings: {},
               };
             }
           }
@@ -537,17 +164,12 @@ export default function TranslationStudioPage() {
           }
 
           if (configObj) {
-            console.log("Applying Event Setup Wizard config:", configObj);
             if (configObj.id) setSelectedEventId(configObj.id);
             if (configObj.inputDevice) setInputDevice(configObj.inputDevice);
             if (configObj.outputDevice) setOutputDevice(configObj.outputDevice);
             if (configObj.sourceLanguage) setSourceLanguage(configObj.sourceLanguage);
             if (configObj.targetLanguages) setTargetLanguages(configObj.targetLanguages);
             if (configObj.voiceSelection) {
-              setVoicesList((prev) => ({
-                ...prev,
-                ...configObj.voiceSelection,
-              }));
               const firstTarget = configObj.targetLanguages?.[0];
               if (firstTarget && configObj.voiceSelection[firstTarget]) {
                 setVoiceProfile(configObj.voiceSelection[firstTarget]);
@@ -561,456 +183,40 @@ export default function TranslationStudioPage() {
     }
 
     loadData();
-
-    // 8. Initialize Recognition Recovery Manager
-    const recoveryManager = new RecognitionRecoveryManager();
-    recoveryManagerRef.current = recoveryManager;
-
-    recoveryManager.registerCallbacks({
-      onVisibilityChange: (visible) => {
-        if (visible) {
-          setRecoveryStatus("recovering");
-          setLastRecoveryTime(Date.now());
-        }
-      },
-      onRecoveryStart: (reason) => {
-        console.log(`Recovery started: ${reason}`);
-        setRecoveryStatus("recovering");
-      },
-      onRecoveryComplete: (attempt) => {
-        if (attempt.success) {
-          setRecoveryStatus("recovered");
-          setTimeout(() => setRecoveryStatus("idle"), 3000);
-        } else {
-          setRecoveryStatus("error");
-        }
-      },
-      onAudioContextResumed: () => {
-        console.log("AudioContext resumed by recovery manager");
-      },
-      onMicReacquired: () => {
-        console.log("Microphone reacquired by recovery manager");
-      },
-      onRecognizerRestarted: () => {
-        console.log("Speech recognizer restarted by recovery manager");
-      },
-    });
-
-    recoveryManager.start({
-      recoverFn: async () => {
-        if (speechServiceRef.current && speechServiceRef.current.isRunning()) {
-          return await speechServiceRef.current.recoverAfterTabSwitch();
-        }
-        return false;
-      },
-      reacquireMicFn: async () => {
-        try {
-          const constraints: MediaStreamConstraints = {
-            audio: inputDevice !== "default" ? { deviceId: { exact: inputDevice } } : true,
-          };
-          return await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (err) {
-          console.warn("Failed to reacquire microphone:", err);
-          return null;
-        }
-      },
-      resumeAudioFn: async () => {
-        // AudioContext resume is handled by the recovery manager internally
-      },
-    });
-
-    // Clean up connections on leave
-    return () => {
-      if (recoveryManagerRef.current) {
-        recoveryManagerRef.current.stop();
-        recoveryManagerRef.current = null;
-      }
-      if (speechServiceRef.current) {
-        speechServiceRef.current.stop();
-      }
-      if (synthesisQueueRef.current) {
-        synthesisQueueRef.current.stopAll();
-      }
-    };
   }, []);
 
-  // Update hardware names based on selections
   useEffect(() => {
     const inputOpt = audioInputsPool.find((o) => o.value === inputDevice);
     if (inputOpt) setMicrophoneStatus(inputOpt.label);
+  }, [inputDevice, audioInputsPool]);
 
-    const outputOpt = audioOutputsPool.find((o) => o.value === outputDevice);
-    if (outputOpt) {
-      setSpeakerStatus(outputOpt.label);
-      if (synthesisQueueRef.current) {
-        synthesisQueueRef.current.setDeviceId(outputDevice === "default" ? null : outputDevice);
-      }
-    }
-  }, [inputDevice, outputDevice, audioInputsPool, audioOutputsPool]);
-
-  // Sync refs for stable callback closures
-  useEffect(() => { isVoiceEnabledRef.current = isVoiceEnabled; }, [isVoiceEnabled]);
-  useEffect(() => { voicesListRef.current = voicesList; }, [voicesList]);
-  useEffect(() => { voiceProfileRef.current = voiceProfile; }, [voiceProfile]);
-
-  // Transcripts handlers
-  const handleClearTranscripts = () => {
-    setTranscripts([]);
-    setSpeechStatuses({});
-    if (pipelineRef.current) {
-      pipelineRef.current.clearQueue();
-    }
-    if (synthesisQueueRef.current) {
-      synthesisQueueRef.current.clearQueue();
-    }
-  };
-
-  const handleExportTranscripts = () => {
-    if (transcripts.length === 0) return;
-    
-    const textContent = transcripts
-      .map((t) => {
-        let block = `Original: ${t.originalText}`;
-        t.targetLanguage.forEach((lang) => {
-          block += `\n${lang}: ${t.translatedText[lang] || "Translating..."}`;
-        });
-        return block;
-      })
-      .join("\n\n");
-
-    const blob = new Blob([textContent], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `AetherVOX-synthesis-${Date.now()}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Audio capture controls
-  const handleStartListening = async () => {
-    if (!isAzureConfigured || !azureToken || !azureRegion) {
-      alert("Cannot start: Azure Speech credentials are not configured.");
-      return;
-    }
-
-    let micStream: MediaStream;
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      alert("Permission denied. Ensure microphone access is allowed.");
-      setRecognitionState("Error");
-      return;
-    }
-
-    if (speechServiceRef.current) {
-      await speechServiceRef.current.stop();
-    }
-
-    // Auto-enable translation pipeline when mic starts (if not already enabled and targets exist)
-    if (!isTranslating && targetLanguages.length > 0) {
-      setIsTranslating(true);
-    }
-
-    const service = new SpeechRecognitionService(
-      azureToken,
-      azureRegion,
-      sourceLanguage,
-      inputDevice === "default" ? null : inputDevice
-    );
-
-    service.registerCallbacks({
-      onStateChange: (state) => {
-        setRecognitionState(state);
-        setIsListening(state === "Listening" || state === "Processing" || state === "Connecting");
-      },
-      onResult: (result) => {
-        if (result.isFinal) {
-          const recLatency = Math.floor(Math.random() * 40) + 120; // 120-160ms
-          setRecognitionLatency(`${recLatency}ms`);
-
-          // Always pipe final recognized sentences into the translation pipeline
-          if (pipelineRef.current && targetLanguages.length > 0) {
-            pipelineRef.current.enqueue(
-              result.text,
-              sourceLanguage,
-              targetLanguages,
-              result.confidence || 95,
-              recLatency
-            );
-          } else {
-            const newItem: TranslationMessage = {
-              id: `tr-${Date.now()}`,
-              originalText: result.text,
-              translatedText: {},
-              sourceLanguage,
-              targetLanguage: [],
-              provider: "Azure Speech",
-              confidence: result.confidence || 95,
-              recognitionLatency: recLatency,
-              translationLatency: 0,
-              timestamp: new Date().toISOString(),
-              status: "Completed",
-            };
-            setTranscripts((prev) => [...prev, newItem]);
-            setInterimText("");
-          }
-        } else {
-          setInterimText(result.text);
-        }
-      },
-      onError: (error) => {
-        console.error("Speech Recognition Service error:", error);
-      },
-      onRecovery: (event) => {
-        if (event.success) {
-          setRecoveryStatus("recovered");
-          setTimeout(() => setRecoveryStatus("idle"), 3000);
-        } else {
-          setRecoveryStatus("error");
-        }
-      },
-    });
-
-    speechServiceRef.current = service;
-    try {
-      await service.start();
-
-      // Provide mic stream to recovery manager
-      if (recoveryManagerRef.current) {
-        recoveryManagerRef.current.setMediaStream(micStream);
-      }
-    } catch (err) {
-      console.error("Failed to start speech service:", err);
-      // Clean up mic on failure
-      micStream.getTracks().forEach((t) => t.stop());
-    }
-  };
-
-  const handleStopListening = async () => {
-    if (speechServiceRef.current) {
-      await speechServiceRef.current.stop();
-      speechServiceRef.current = null;
-    }
-    // Clean up mic stream and notify recovery manager
-    if (recoveryManagerRef.current) {
-      recoveryManagerRef.current.setMediaStream(null);
-    }
-    setInterimText("");
-    setIsListening(false);
-    setRecognitionState("Idle");
-  };
-
-  // Translation controls
-  const handleStartTranslation = () => {
-    setIsTranslating(true);
-  };
-
-  const handleStopTranslation = () => {
-    setIsTranslating(false);
-  };
-
-  const handleRetryFailed = () => {
-    if (pipelineRef.current) {
-      pipelineRef.current.retryFailed();
-    }
-  };
-
-  // Speech playback controls
-  const handleStartVoice = () => {
-    setIsVoiceEnabled(true);
-  };
-
-  const handleStopVoice = () => {
-    setIsVoiceEnabled(false);
-    if (synthesisQueueRef.current) {
-      synthesisQueueRef.current.stopAll();
-    }
-  };
-
-  const handleStopAllSpeech = () => {
-    if (synthesisQueueRef.current) {
-      synthesisQueueRef.current.stopAll();
-    }
-  };
-
-  const handleClearSpeechQueue = () => {
-    if (synthesisQueueRef.current) {
-      synthesisQueueRef.current.clearQueue();
-    }
-  };
-
-  // Playback handlers from translated cards list items
-  const handlePlaySpeechItem = (text: string, langCode: string, key: string) => {
-    const voiceName = voicesList[langCode] || "en-US-AvaMultilingualNeural";
-    if (synthesisQueueRef.current) {
-      synthesisQueueRef.current.enqueue(text, langCode, voiceName);
-    }
-  };
-
-  const handlePauseSpeechItem = (key: string) => {
-    if (synthesisQueueRef.current) {
-      synthesisQueueRef.current.pause();
-    }
-  };
-
-  const handleStopSpeechItem = (key: string) => {
-    if (synthesisQueueRef.current) {
-      synthesisQueueRef.current.stopAll();
-    }
-  };
-
-  const handleReplaySpeechItem = (text: string, langCode: string, key: string) => {
-    const voiceName = voicesList[langCode] || "en-US-AvaMultilingualNeural";
-    if (synthesisQueueRef.current) {
-      synthesisQueueRef.current.enqueue(text, langCode, voiceName);
-    }
-  };
-
-  const handleDownloadAudio = (key: string) => {
-    const speechInfo = speechStatuses[key];
-    if (!speechInfo) return;
-
-    const queueItem = synthesisQueueRef.current?.getQueue().find((m) => `${m.id}-${m.language}` === key || m.id === key);
-    const audioData = (queueItem as any)?.audioData || speechInfo;
-
-    const matchedTranscript = transcripts.find((t) =>
-      t.targetLanguage.some((lang) => `${t.id}-${lang}` === key)
-    );
-    const langCode = matchedTranscript?.targetLanguage.find((lang) => `${matchedTranscript.id}-${lang}` === key) || key.split("-").pop() || "audio";
-
-    const synQueue = synthesisQueueRef.current?.getQueue();
-    const queueMsg = synQueue?.find((m) => m.id === key || `${m.id}-${m.language}` === key);
-    const rawAudio = queueMsg?.audioData;
-
-    if (rawAudio) {
-      try {
-        const binaryString = atob(rawAudio);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: "audio/wav" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `aethervox-${langCode}-${Date.now()}.wav`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      } catch (err) {
-        console.warn("Failed to decode audio for download:", err);
-      }
-    }
-  };
-
-  // Session management handlers (Module 12)
-  const handleStartSession = async () => {
-    if (!streamingServiceRef.current) return;
+  const handleVoiceProfileChange = async (newProfileName: string) => {
+    setVoiceProfile(newProfileName);
     try {
       const supabase = createClient();
-      const { data: userRes } = await supabase.auth.getUser();
-      const userId = userRes?.user?.id || "usr-admin-001";
-      
-      let orgId = "org-aether-main";
-      if (userRes?.user?.id) {
-        const { data: userProfile } = await supabase
-          .from("profiles")
-          .select("organization_id")
-          .eq("id", userRes.user.id)
-          .maybeSingle();
-        if (userProfile?.organization_id) {
-          orgId = userProfile.organization_id;
+      const voiceProfileRepo = new VoiceProfileRepository(supabase);
+      const allProfiles = await voiceProfileRepo.findAll();
+      const mappings = allProfiles.filter((p) => p.profileName === newProfileName);
+      if (mappings.length > 0) {
+        const firstTarget = targetLanguages[0];
+        const matchMapping = mappings.find((m) => m.language === firstTarget);
+        if (matchMapping) {
+          setVoiceProfile(matchMapping.voiceName);
         }
       }
-
-      setStreamingStatus("connecting");
-      const session = await streamingServiceRef.current.createSession(
-        selectedEventId,
-        orgId,
-        userId
-      );
-      setStreamingSession(session);
-      activeSessionRef.current = session;
-      setSessionState("active");
-      setIsStreamingActive(true);
-      setMessagesBroadcasted(0);
-      sequenceNumberRef.current = 0;
-
-      // Auto-start mic and translation if not already running
-      if (!isListening) {
-        await handleStartListening();
-      } else if (!isTranslating && targetLanguages.length > 0) {
-        setIsTranslating(true);
-      }
-    } catch (err) {
-      console.error("Failed to start session:", err);
-      alert("Failed to start streaming session. Ensure database connection is available.");
-      setStreamingStatus("error");
+    } catch (e) {
+      console.warn("Failed to apply selected voice profile:", e);
     }
   };
 
-  const handlePauseSession = async () => {
-    if (!streamingServiceRef.current) return;
-    await streamingServiceRef.current.updateSessionState("paused");
-    setSessionState("paused");
-  };
-
-  const handleResumeSession = async () => {
-    if (!streamingServiceRef.current) return;
-    await streamingServiceRef.current.updateSessionState("active");
-    setSessionState("active");
-  };
-
-  const handleStopSession = async () => {
-    if (!streamingServiceRef.current) return;
-    if (!confirm("Are you sure you want to stop the live event stream? This will disconnect all listeners.")) return;
-    await streamingServiceRef.current.updateSessionState("stopped");
-    await streamingServiceRef.current.leaveSession();
-    setSessionState("stopped");
-    setIsStreamingActive(false);
-    setStreamingSession(null);
-    activeSessionRef.current = null;
-  };
-
-  const handleShareLink = async () => {
-    if (typeof window === "undefined") return;
-    const listenUrl = `${window.location.origin}/listen/${selectedEventId}`;
-    const shareData = {
-      title: "AetherVOX Live Broadcast",
-      text: `Join live translated audio stream for ${sessionName}`,
-      url: listenUrl,
-    };
-
-    if (typeof navigator !== "undefined" && (navigator as any).share) {
-      try {
-        await (navigator as any).share(shareData);
-        return;
-      } catch (err) {
-        // Fallback to clipboard if share modal is closed
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(listenUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {}
-  };
-
-  const getSessionStatus = () => {
-    if (isListening || isTranslating) return "ACTIVE";
-    return "IDLE";
-  };
+  const micReady = audioInputsPool.length > 0 && inputDevice !== "";
+  const speechReady = isAzureConfigured;
+  const translatorReady = isAzureConfigured;
+  const ttsReady = isAzureConfigured;
+  const eventSelected = !!selectedEventId && selectedEventId !== "";
+  const allDiagnosticsPassed = micReady && speechReady && translatorReady && ttsReady && eventSelected;
 
   const activeEvent = events.find((e) => e.id === selectedEventId);
-  const sessionName = activeEvent ? `${activeEvent.name} Stream` : "Manual Override Session";
-
-  const getSourceLangLabel = () => {
-    const lang = languagesPool.find((l) => l.value === sourceLanguage);
-    return lang ? lang.label : sourceLanguage;
-  };
 
   const getTargetLangsLabel = () => {
     if (targetLanguages.length === 0) return "None Selected";
@@ -1022,351 +228,54 @@ export default function TranslationStudioPage() {
       .join(", ");
   };
 
-  const hasFailedTranslations = transcripts.some((m) => m.status === "Failed");
-
-  const handleVoiceProfileChange = async (newProfileName: string) => {
-    setVoiceProfile(newProfileName);
-
-    try {
-      const supabase = createClient();
-      const voiceProfileRepo = new VoiceProfileRepository(supabase);
-      const allProfiles = await voiceProfileRepo.findAll();
-      const mappings = allProfiles.filter((p) => p.profileName === newProfileName);
-
-      if (mappings.length > 0) {
-        setVoicesList((prev) => {
-          const updated = { ...prev };
-          mappings.forEach((m) => {
-            updated[m.language] = m.voiceName;
-          });
-          return updated;
-        });
-
-        const firstTarget = targetLanguages[0];
-        const matchMapping = mappings.find((m) => m.language === firstTarget);
-        if (matchMapping) {
-          setCurrentVoice(matchMapping.voiceName);
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to apply selected voice profile:", e);
-    }
-  };
-
-  // Timer state
-  const [elapsedTime, setElapsedTime] = useState(0);
-  useEffect(() => {
-    let timerId: any = null;
-    if (isListening || isStreamingActive) {
-      timerId = setInterval(() => {
-        setElapsedTime((prev) => prev + 1);
-      }, 1000);
-    } else {
-      setElapsedTime(0);
-    }
-    return () => {
-      if (timerId) clearInterval(timerId);
+  const handleEnterLiveStudio = () => {
+    const completeConfig = {
+      id: selectedEventId !== "manual" ? selectedEventId : undefined,
+      name: activeEvent ? activeEvent.name : "Manual Override Session",
+      inputDevice,
+      outputDevice,
+      sourceLanguage,
+      targetLanguages,
+      voiceProfile,
+      translationModel,
+      latencyMode,
+      profanityFilter,
+      targetVocabulary,
+      speechProvider,
+      translationProvider,
+      outputVoiceEngine,
+      captionsEnabled,
+      recordingEnabled,
     };
-  }, [isListening, isStreamingActive]);
-
-  const formatTimer = (seconds: number) => {
-    const hrs = Math.floor(seconds / 3600).toString().padStart(2, "0");
-    const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, "0");
-    const secs = (seconds % 60).toString().padStart(2, "0");
-    return `${hrs}:${mins}:${secs}`;
+    sessionStorage.setItem("aethervox_setup_config", JSON.stringify(completeConfig));
+    router.push("/dashboard/studio");
   };
-
-  // Readiness diagnostics validation
-  const micReady = audioInputsPool.length > 0 && inputDevice !== "";
-  const speechReady = isAzureConfigured;
-  const translatorReady = isAzureConfigured;
-  const ttsReady = isAzureConfigured;
-  const eventSelected = !!selectedEventId && selectedEventId !== "";
-  const allDiagnosticsPassed = micReady && speechReady && translatorReady && ttsReady && eventSelected;
-
-  if (studioStage === "setup") {
-    return (
-      <div className="space-y-6 max-w-[1400px] mx-auto text-white">
-        {/* Stage 1 Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-white/[0.06] pb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-extrabold text-electric-blue uppercase tracking-widest bg-electric-blue/10 border border-electric-blue/20 px-2 py-0.5 rounded">
-                Stage 1: Pre-Flight Readiness Check
-              </span>
-            </div>
-            <h1 className="text-xl font-bold tracking-tight text-white mt-1">
-              Translation Studio Setup & System Diagnostics
-            </h1>
-          </div>
-          <button
-            onClick={() => setStudioStage("live")}
-            disabled={!allDiagnosticsPassed}
-            className="h-10 px-5 rounded-xl bg-gradient-to-r from-electric-blue to-accent-purple hover:from-electric-blue/90 hover:to-accent-purple/90 text-black font-extrabold text-xs tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all inline-flex items-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.2)] cursor-pointer"
-          >
-            <span>ENTER LIVE STUDIO CONSOLE</span>
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* 2-Column Grid Layout */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Left Column: Configuration Panel */}
-          <div className="lg:col-span-1">
-            <TranslationConfigPanel
-              selectedEventId={selectedEventId}
-              setSelectedEventId={setSelectedEventId}
-              sourceLanguage={sourceLanguage}
-              setSourceLanguage={setSourceLanguage}
-              targetLanguages={targetLanguages}
-              setTargetLanguages={setTargetLanguages}
-              voiceProfile={voiceProfile}
-              setVoiceProfile={handleVoiceProfileChange}
-              translationModel={translationModel}
-              setTranslationModel={setTranslationModel}
-              latencyMode={latencyMode}
-              setLatencyMode={setLatencyMode}
-              profanityFilter={profanityFilter}
-              setProfanityFilter={setProfanityFilter}
-              targetVocabulary={targetVocabulary}
-              setTargetVocabulary={setTargetVocabulary}
-              inputDevice={inputDevice}
-              setInputDevice={setInputDevice}
-              outputDevice={outputDevice}
-              setOutputDevice={setOutputDevice}
-              speechProvider={speechProvider}
-              setSpeechProvider={setSpeechProvider}
-              translationProvider={translationProvider}
-              setTranslationProvider={setTranslationProvider}
-              outputVoiceEngine={outputVoiceEngine}
-              setOutputVoiceEngine={setOutputVoiceEngine}
-              captionsEnabled={captionsEnabled}
-              setCaptionsEnabled={setCaptionsEnabled}
-              recordingEnabled={recordingEnabled}
-              setRecordingEnabled={setRecordingEnabled}
-              languagesPool={languagesPool}
-              voiceProfilesPool={voiceProfilesPool}
-              audioInputsPool={audioInputsPool}
-              audioOutputsPool={audioOutputsPool}
-              speechProvidersPool={[
-                { value: "azure", label: "Azure Speech Services (Default)" },
-                { value: "whisper", label: "OpenAI Whisper API (Standard)" }
-              ]}
-              translationProvidersPool={[
-                { value: "azure-translator", label: "Azure Translator V3 (Neural)" },
-                { value: "deepl", label: "DeepL Pro API (Standard)" }
-              ]}
-              voiceEnginesPool={[
-                { value: "elevenlabs", label: "ElevenLabs Synthesis (High-Fi)" },
-                { value: "azure-tts", label: "Azure Neural TTS (Standard)" }
-              ]}
-            />
-          </div>
-
-          {/* Right Column: Pre-Flight System Diagnostics Matrix */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-6 space-y-6 backdrop-blur-md shadow-2xl">
-              <div className="flex items-center justify-between border-b border-white/[0.04] pb-4">
-                <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-electric-blue" />
-                    <span>System Diagnostic Readiness Matrix</span>
-                  </h3>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    All 5 infrastructure checks must be verified green before launching the operator console.
-                  </p>
-                </div>
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
-                  allDiagnosticsPassed
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                    : "bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse"
-                }`}>
-                  {allDiagnosticsPassed ? "Ready for Broadcast" : "Validation Pending"}
-                </span>
-              </div>
-
-              <div className="space-y-3.5">
-                {[
-                  { name: "Microphone Input Hardware", ready: micReady, detail: microphoneStatus },
-                  { name: "Azure Speech Recognition Engine", ready: speechReady, detail: isAzureConfigured ? "Connected (Azure SDK / Fallback Active)" : "Connecting..." },
-                  { name: "Azure Translator Neural V3", ready: translatorReady, detail: isAzureConfigured ? "Connected (Neural Multi-Language)" : "Connecting..." },
-                  { name: "Azure Speech Synthesis Engine", ready: ttsReady, detail: "Speaker Sink Initialized" },
-                  { name: "Active Event Link Configuration", ready: eventSelected, detail: activeEvent ? activeEvent.name : "Manual Session Mode" },
-                ].map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3.5 rounded-lg bg-zinc-950/60 border border-white/[0.04]">
-                    <div className="flex items-center gap-3">
-                      {item.ready ? (
-                        <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
-                      ) : (
-                        <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />
-                      )}
-                      <div>
-                        <span className="text-xs font-bold text-white block">{item.name}</span>
-                        <span className="text-[10px] text-zinc-500 font-mono block">{item.detail}</span>
-                      </div>
-                    </div>
-                    <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border ${
-                      item.ready
-                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                        : "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                    }`}>
-                      {item.ready ? "READY" : "CHECKING"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-4 border-t border-white/[0.04] flex items-center justify-between">
-                <div className="text-[11px] text-zinc-500">
-                  <span>Selected Event: </span>
-                  <span className="text-white font-bold">{activeEvent ? activeEvent.name : "Manual Override"}</span>
-                  <span className="mx-2">•</span>
-                  <span>Targets: </span>
-                  <span className="text-electric-blue font-bold">{getTargetLangsLabel()}</span>
-                </div>
-
-                <button
-                  onClick={() => setStudioStage("live")}
-                  disabled={!allDiagnosticsPassed}
-                  className="h-10 px-6 rounded-xl bg-gradient-to-r from-electric-blue to-accent-purple hover:from-electric-blue/90 hover:to-accent-purple/90 text-black font-extrabold text-xs tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all inline-flex items-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.2)] cursor-pointer"
-                >
-                  <span>ENTER LIVE STUDIO CONSOLE</span>
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-4 max-w-[1600px] mx-auto text-white">
-      {/* Stage 2 Live Workspace Bar */}
-      <div className="flex items-center justify-between bg-zinc-950/40 border border-white/[0.04] p-3 rounded-xl">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-            Stage 2: Live Broadcasting Operator Console
-          </span>
+    <div className="space-y-6 max-w-[1400px] mx-auto text-white">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-white/[0.06] pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-extrabold text-electric-blue uppercase tracking-widest bg-electric-blue/10 border border-electric-blue/20 px-2 py-0.5 rounded">
+              Stage 1: Pre-Flight Readiness Check
+            </span>
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-white mt-1">
+            Translation Studio Setup & System Diagnostics
+          </h1>
         </div>
         <button
-          onClick={() => setStudioStage("setup")}
-          className="h-8 px-3 rounded-lg border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 text-[10px] font-bold text-zinc-300 flex items-center gap-1.5 transition-all cursor-pointer"
+          onClick={handleEnterLiveStudio}
+          disabled={!allDiagnosticsPassed}
+          className="h-10 px-5 rounded-xl bg-gradient-to-r from-electric-blue to-accent-purple hover:from-electric-blue/90 hover:to-accent-purple/90 text-black font-extrabold text-xs tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all inline-flex items-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.2)] cursor-pointer"
         >
-          <span>Pre-Flight & Diagnostics</span>
+          <span>ENTER LIVE STUDIO</span>
+          <ArrowRight className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Recovery Status Banner */}
-      {recoveryStatus !== "idle" && (
-        <div className={`flex items-center justify-center gap-2 p-2 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
-          recoveryStatus === "recovering"
-            ? "bg-amber-500/10 border border-amber-500/20 text-amber-400"
-            : recoveryStatus === "recovered"
-            ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-            : "bg-red-500/10 border border-red-500/20 text-red-400"
-        }`}>
-          {recoveryStatus === "recovering" && (
-            <>
-              <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-              Recovering recognition after tab switch...
-            </>
-          )}
-          {recoveryStatus === "recovered" && (
-            <>
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              Recognition recovered successfully
-            </>
-          )}
-          {recoveryStatus === "error" && (
-            <>
-              <span className="h-2 w-2 rounded-full bg-red-400" />
-              Recognition recovery failed. Please restart mic.
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Top Workspace Header */}
-      <TranslationHeader
-        sessionName={sessionName}
-        status={getSessionStatus()}
-        broadcastStatus={streamingStatus}
-        listenerCount={audienceCount}
-        recognitionLatency={recognitionLatency}
-        translationLatency={translationLatency}
-        synthesisLatency={synthesisLatency}
-        totalPipelineLatency={totalPipelineLatency}
-        timerString={formatTimer(elapsedTime)}
-      />
-
-      {/* Live Metrics Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 bg-zinc-950/20 border border-white/[0.04] p-2.5 rounded-xl shadow-inner">
-        {/* Card 1: Rec Confidence */}
-        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center">
-          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Rec Conf</span>
-          <span className="text-[11px] font-bold text-emerald-400 font-mono mt-0.5">
-            {transcripts.length > 0
-              ? `${Math.round(transcripts.reduce((acc, t) => acc + (t.confidence || 95), 0) / transcripts.length)}%`
-              : "--"}
-          </span>
-        </div>
-
-        {/* Card 2: Trans Confidence */}
-        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center">
-          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Trans Conf</span>
-          <span className="text-[11px] font-bold text-emerald-400 font-mono mt-0.5">98%</span>
-        </div>
-
-        {/* Card 3: Queue Size */}
-        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center">
-          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Queue Size</span>
-          <span className="text-[11px] font-bold text-electric-blue font-mono mt-0.5">{voiceQueueCount}</span>
-        </div>
-
-        {/* Card 4: Packet Count */}
-        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center">
-          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Packets</span>
-          <span className="text-[11px] font-bold text-zinc-350 font-mono mt-0.5">{messagesBroadcasted}</span>
-        </div>
-
-        {/* Card 5: Audio Bitrate */}
-        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center">
-          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Bitrate</span>
-          <span className="text-[11px] font-bold text-zinc-350 font-mono mt-0.5">128 kbps</span>
-        </div>
-
-        {/* Card 6: Active Voice */}
-        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center truncate">
-          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Active Voice</span>
-          <span className="text-[10px] font-bold text-zinc-350 truncate block mt-0.5" title={currentVoice}>
-            {currentVoice.split("Neural")[0]}
-          </span>
-        </div>
-
-        {/* Card 7: Input Device */}
-        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center truncate">
-          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Input Device</span>
-          <span className="text-[9px] font-semibold text-zinc-400 truncate block mt-0.5" title={microphoneStatus}>
-            {microphoneStatus}
-          </span>
-        </div>
-
-        {/* Card 8: Output Device */}
-        <div className="rounded-lg border border-white/[0.03] bg-zinc-900/10 p-2 text-center truncate">
-          <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-wider block">Output Device</span>
-          <span className="text-[9px] font-semibold text-zinc-400 truncate block mt-0.5" title={speakerStatus}>
-            {speakerStatus}
-          </span>
-        </div>
-      </div>
-
-      {/* Main Workspace 3-Column Layout */}
-      <div className="grid gap-4 lg:grid-cols-4 items-stretch">
-        {/* Left Column: Config Panel (Accordion) */}
-        <div className="lg:col-span-1 flex flex-col h-full">
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-1">
           <TranslationConfigPanel
             selectedEventId={selectedEventId}
             setSelectedEventId={setSelectedEventId}
@@ -1398,8 +307,6 @@ export default function TranslationStudioPage() {
             setCaptionsEnabled={setCaptionsEnabled}
             recordingEnabled={recordingEnabled}
             setRecordingEnabled={setRecordingEnabled}
-            
-            // Pools
             languagesPool={languagesPool}
             voiceProfilesPool={voiceProfilesPool}
             audioInputsPool={audioInputsPool}
@@ -1419,150 +326,78 @@ export default function TranslationStudioPage() {
           />
         </div>
 
-        {/* Center Columns: Preview Feed */}
-        <div className="lg:col-span-2 flex flex-col h-full">
-          <TranslationPreview
-            transcripts={transcripts}
-            interimText={interimText}
-            recognitionState={recognitionState}
-            onClearTranscripts={handleClearTranscripts}
-            onExportTranscripts={handleExportTranscripts}
-            
-            // Speech controllers
-            speechStatuses={speechStatuses}
-            onPlaySpeech={handlePlaySpeechItem}
-            onPauseSpeech={handlePauseSpeechItem}
-            onStopSpeech={handleStopSpeechItem}
-            onReplaySpeech={handleReplaySpeechItem}
-            onDownloadAudio={handleDownloadAudio}
-          />
-        </div>
-
-        {/* Right Column: AI Status Panel & Stream Link */}
-        <div className="lg:col-span-1 flex flex-col gap-4 h-full">
-          <AIStatusPanel
-            azureSpeechStatus={isListening ? "Connected" : "Disabled"}
-            azureSpeechLatency={recognitionLatency}
-            azureSpeechErrors={0}
-            
-            azureTranslatorStatus={isTranslating ? "Connected" : "Disabled"}
-            azureTranslatorLatency={translationLatency}
-            azureTranslatorErrors={translationErrors}
-            
-            azureSynthesisStatus={isVoiceEnabled && isListening ? "Connected" : "Disabled"}
-            azureSynthesisLatency={synthesisLatency}
-            azureSynthesisQueueSize={voiceQueueCount}
-            
-            elevenLabsStatus="Connected"
-            elevenLabsLatency="210ms"
-            
-            openAiStatus="Connected"
-            openAiLatency={translationLatency}
-
-            streamingStatus={streamingStatus}
-            streamingCount={audienceCount}
-            streamingErrors={0}
-            
-            audioInputName={microphoneStatus}
-            audioOutputName={speakerStatus}
-          />
-
-          {/* Operator Live Session Card */}
-          <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-4 space-y-3 shadow-inner relative overflow-hidden shrink-0">
-            <div className="absolute top-0 right-0 h-16 w-16 bg-electric-blue/5 rounded-full blur-2xl pointer-events-none" />
-            
-            <div className="flex items-center justify-between">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-6 space-y-6 backdrop-blur-md shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/[0.04] pb-4">
               <div>
-                <span className="text-[9px] font-extrabold text-zinc-550 uppercase tracking-widest block">Broadcasting QR</span>
-                <h3 className="text-xs font-bold tracking-tight text-white mt-0.5">Audience Portal</h3>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-electric-blue" />
+                  <span>System Diagnostic Readiness Matrix</span>
+                </h3>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  All 5 infrastructure checks must be verified green before launching the operator console.
+                </p>
               </div>
-              <div className={`h-2 w-2 rounded-full ${
-                isStreamingActive && streamingStatus === "connected"
-                  ? "bg-emerald-500 shadow-[0_0_8px_#10b981]"
-                  : isStreamingActive
-                  ? "bg-amber-500 animate-pulse"
-                  : "bg-zinc-700"
-              }`} />
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
+                allDiagnosticsPassed
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                  : "bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse"
+              }`}>
+                {allDiagnosticsPassed ? "Ready for Broadcast" : "Validation Pending"}
+              </span>
             </div>
 
-            {isStreamingActive && (
-              <div className="border-t border-white/[0.04] pt-3 flex items-center gap-3 animate-in fade-in duration-200">
-                <div className="p-1 rounded bg-zinc-950 border border-white/[0.04] shrink-0">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&color=00d4ff&bgcolor=09090b&data=${encodeURIComponent(
-                      typeof window !== "undefined" ? `${window.location.origin}/listen/${selectedEventId}` : ""
-                    )}`}
-                    alt="Audience QR Code"
-                    className="h-16 w-16 border border-white/[0.08] rounded p-0.5 bg-zinc-950"
-                  />
-                </div>
-                <div className="flex-1 space-y-2 min-w-0">
-                  <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider block">Scan to Join Channel</span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={handleShareLink}
-                      className="flex-1 h-7 rounded border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 text-[10px] font-bold text-zinc-350 flex items-center justify-center gap-1 cursor-pointer transition-all"
-                      title="Share broadcast link (WhatsApp, Telegram, Mail, Copy)"
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="h-3 w-3 text-emerald-400" />
-                          <span>Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3 w-3 text-electric-blue" />
-                          <span>Share Link</span>
-                        </>
-                      )}
-                    </button>
-                    <a
-                      href={`/listen/${selectedEventId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="h-7 w-7 rounded border border-white/[0.08] bg-zinc-900 hover:bg-zinc-800 flex items-center justify-center text-zinc-350 transition-all"
-                    >
-                      <ExternalLink className="h-3 w-3 text-electric-blue" />
-                    </a>
+            <div className="space-y-3.5">
+              {[
+                { name: "Microphone Input Hardware", ready: micReady, detail: microphoneStatus },
+                { name: "Azure Speech Recognition Engine", ready: speechReady, detail: isAzureConfigured ? "Connected (Azure SDK / Fallback Active)" : "Connecting..." },
+                { name: "Azure Translator Neural V3", ready: translatorReady, detail: isAzureConfigured ? "Connected (Neural Multi-Language)" : "Connecting..." },
+                { name: "Azure Speech Synthesis Engine", ready: ttsReady, detail: "Speaker Sink Initialized" },
+                { name: "Active Event Link Configuration", ready: eventSelected, detail: activeEvent ? activeEvent.name : "Manual Session Mode" },
+              ].map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3.5 rounded-lg bg-zinc-950/60 border border-white/[0.04]">
+                  <div className="flex items-center gap-3">
+                    {item.ready ? (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />
+                    )}
+                    <div>
+                      <span className="text-xs font-bold text-white block">{item.name}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono block">{item.detail}</span>
+                    </div>
                   </div>
+                  <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border ${
+                    item.ready
+                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                      : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                  }`}>
+                    {item.ready ? "READY" : "CHECKING"}
+                  </span>
                 </div>
+              ))}
+            </div>
+
+            <div className="pt-4 border-t border-white/[0.04] flex items-center justify-between">
+              <div className="text-[11px] text-zinc-500">
+                <span>Selected Event: </span>
+                <span className="text-white font-bold">{activeEvent ? activeEvent.name : "Manual Override"}</span>
+                <span className="mx-2">•</span>
+                <span>Targets: </span>
+                <span className="text-electric-blue font-bold">{getTargetLangsLabel()}</span>
               </div>
-            )}
+
+              <button
+                onClick={handleEnterLiveStudio}
+                disabled={!allDiagnosticsPassed}
+                className="h-10 px-6 rounded-xl bg-gradient-to-r from-electric-blue to-accent-purple hover:from-electric-blue/90 hover:to-accent-purple/90 text-black font-extrabold text-xs tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all inline-flex items-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.2)] cursor-pointer"
+              >
+                <span>ENTER LIVE STUDIO</span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Floating Control Dock */}
-      <div className="pt-2">
-        <SessionControls
-          isListening={isListening}
-          onStartListening={handleStartListening}
-          onStopListening={handleStopListening}
-          
-          isTranslating={isTranslating}
-          onStartTranslation={handleStartTranslation}
-          onStopTranslation={handleStopTranslation}
-
-          isVoiceEnabled={isVoiceEnabled}
-          onStartVoice={handleStartVoice}
-          onStopVoice={handleStopVoice}
-
-          isStreamingActive={isStreamingActive}
-          onStartSession={handleStartSession}
-          onStopSession={handleStopSession}
-          sessionState={sessionState}
-          onPauseSession={handlePauseSession}
-          onResumeSession={handleResumeSession}
-
-          captionsEnabled={captionsEnabled}
-          setCaptionsEnabled={setCaptionsEnabled}
-
-          recordingEnabled={recordingEnabled}
-          setRecordingEnabled={setRecordingEnabled}
-
-          onExportTranscripts={handleExportTranscripts}
-          isAzureConfigured={isAzureConfigured}
-        />
       </div>
     </div>
   );
