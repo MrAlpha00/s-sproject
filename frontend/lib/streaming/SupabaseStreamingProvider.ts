@@ -131,7 +131,7 @@ export class SupabaseStreamingProvider implements StreamingService {
 
   async broadcastTranslation(msg: Omit<BroadcastMessage, "timestamp">): Promise<void> {
     if (!this.channel || this.status !== "connected") {
-      console.warn("Cannot broadcast translation: stream disconnected.");
+      console.warn("[Streaming] Cannot broadcast translation: stream disconnected.");
       return;
     }
 
@@ -140,6 +140,7 @@ export class SupabaseStreamingProvider implements StreamingService {
       timestamp: new Date().toISOString(),
     };
 
+    console.log(`[Streaming] Broadcasting translation: id=${msg.id} eventId=${msg.eventId} translatedKeys=${Object.keys(msg.translatedText)}`);
     await this.channel.send({
       type: "broadcast",
       event: "translation",
@@ -149,7 +150,7 @@ export class SupabaseStreamingProvider implements StreamingService {
 
   async broadcastAudio(audio: Omit<AudioPacketMetadata, "timestamp">): Promise<void> {
     if (!this.channel || this.status !== "connected") {
-      console.warn("Cannot broadcast audio data: stream disconnected.");
+      console.warn("[Streaming] Cannot broadcast audio data: stream disconnected.");
       return;
     }
 
@@ -158,6 +159,7 @@ export class SupabaseStreamingProvider implements StreamingService {
       timestamp: new Date().toISOString(),
     };
 
+    console.log(`[Streaming] Broadcasting audio: msgId=${audio.messageId} lang=${audio.language} voice=${audio.voice} audioBytes=${audio.audioData?.length || 0} seq=${audio.sequenceNumber}`);
     await this.channel.send({
       type: "broadcast",
       event: "audio",

@@ -176,6 +176,7 @@ export default function LiveOperatorStudioPage() {
 
     pipeline.registerCallbacks({
       onMessageUpdate: (msg) => {
+        console.log(`[Studio] Pipeline onMessageUpdate: msg=${msg.id} status=${msg.status} translatedKeys=${Object.keys(msg.translatedText)} latency=${msg.translationLatency}`);
         setTranscripts((prev) => {
           const index = prev.findIndex((m) => m.id === msg.id);
           if (index >= 0) {
@@ -232,6 +233,7 @@ export default function LiveOperatorStudioPage() {
 
       synthesisQueue.registerCallbacks({
         onMessageUpdate: (msg) => {
+          console.log(`[Studio] SynthesisQueue onMessageUpdate: msg=${msg.id} status=${msg.status} voice=${msg.voice} latency=${msg.latency} hasAudio=${!!msg.audioData}`);
           setTranscripts((prev) => {
             const matched = prev.find((t) =>
               Object.values(t.translatedText).includes(msg.text)
@@ -257,6 +259,7 @@ export default function LiveOperatorStudioPage() {
           });
 
           if (msg.status === "Completed" && msg.audioData && activeSessionRef.current && streamingServiceRef.current) {
+            console.log(`[Studio] Broadcasting audio for msg ${msg.id}: bytes=${msg.audioData.length} lang=${msg.language}`);
             streamingServiceRef.current.broadcastAudio({
               sessionId: activeSessionRef.current.id,
               eventId: selectedEventIdRef.current,
@@ -267,9 +270,12 @@ export default function LiveOperatorStudioPage() {
               duration: msg.duration,
               sequenceNumber: ++sequenceNumberRef.current,
             });
+          } else if (msg.status === "Completed" && !msg.audioData) {
+            console.warn(`[Studio] Synthesis completed but no audioData for msg ${msg.id}`);
           }
         },
         onMetricsUpdate: (metrics) => {
+          console.log(`[Studio] SynthesisQueue metrics: queue=${metrics.queueSize} spoken=${metrics.spokenCount} latency=${metrics.averageSynthesisLatency}ms voice=${metrics.activeVoice}`);
           setSynthesisLatency(`${metrics.averageSynthesisLatency}ms`);
           setVoiceQueueCount(metrics.queueSize);
           setMessagesSpoken(metrics.spokenCount);
@@ -278,19 +284,28 @@ export default function LiveOperatorStudioPage() {
       });
 
       pipeline.registerOnComplete((msg) => {
+        console.log(`[Studio] onCompleteCallback fired for msg ${msg.id}:`, {
+          targetLanguages: msg.targetLanguage,
+          translatedTextKeys: Object.keys(msg.translatedText),
+          isVoiceEnabled: isVoiceEnabledRef.current,
+          hasSynthesisQueue: !!synthesisQueueRef.current,
+        });
+
         if (isVoiceEnabledRef.current) {
           msg.targetLanguage.forEach((langCode) => {
             const text = msg.translatedText[langCode];
-            if (text) {
-              const voiceName = voicesListRef.current[langCode] || "en-US-AvaMultilingualNeural";
-              if (synthesisQueueRef.current) {
-                synthesisQueueRef.current.enqueue(text, langCode, voiceName);
-              }
+            const voiceName = voicesListRef.current[langCode] || "en-US-AvaMultilingualNeural";
+            console.log(`[Studio] TTS enqueue attempt: lang=${langCode} text="${text?.substring(0, 40)}" voice=${voiceName} queueRef=${!!synthesisQueueRef.current}`);
+            if (text && synthesisQueueRef.current) {
+              synthesisQueueRef.current.enqueue(text, langCode, voiceName);
             }
           });
+        } else {
+          console.log("[Studio] Voice disabled — skipping TTS enqueue");
         }
 
         if (activeSessionRef.current && streamingServiceRef.current) {
+          console.log(`[Studio] Broadcasting translation for msg ${msg.id}`);
           streamingServiceRef.current.broadcastTranslation({
             id: msg.id,
             sessionId: activeSessionRef.current.id,
@@ -303,6 +318,8 @@ export default function LiveOperatorStudioPage() {
             latency: msg.translationLatency,
           });
           setMessagesBroadcasted((prev) => prev + 1);
+        } else {
+          console.log(`[Studio] Skipping broadcast: session=${!!activeSessionRef.current} streaming=${!!streamingServiceRef.current}`);
         }
       });
 
@@ -435,7 +452,10 @@ export default function LiveOperatorStudioPage() {
           const recLatency = Math.floor(Math.random() * 40) + 120;
           setRecognitionLatency(`${recLatency}ms`);
 
+          console.log(`[Studio] Speech recognized (final): "${result.text}" conf=${result.confidence} targets=${targetLanguagesRef.current.length}`);
+
           if (pipelineRef.current && targetLanguagesRef.current.length > 0) {
+            console.log(`[Studio] Enqueueing to pipeline: text="${result.text}" source=${sourceLanguage} targets=${targetLanguagesRef.current}`);
             pipelineRef.current.enqueue(
               result.text,
               sourceLanguage,
@@ -444,6 +464,7 @@ export default function LiveOperatorStudioPage() {
               recLatency
             );
           } else {
+            console.log(`[Studio] No pipeline or no targets — recording standalone transcript`);
             const newItem: TranslationMessage = {
               id: `tr-${Date.now()}`,
               originalText: result.text,

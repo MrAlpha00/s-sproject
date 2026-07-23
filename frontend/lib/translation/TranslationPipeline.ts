@@ -144,9 +144,21 @@ export class TranslationPipeline {
             msg.targetLanguage
           );
 
+          console.log(`[Pipeline] Translation result for msg ${msg.id}:`, {
+            success: result.success,
+            translationCount: result.translations?.length || 0,
+            targetLanguages: msg.targetLanguage,
+            rawToCodes: result.translations?.map((t) => t.to) || [],
+          });
+
           if (result.success && result.translations && result.translations.length > 0) {
             result.translations.forEach((t) => {
-              msg.translatedText[t.to] = t.text;
+              const matchingLang = msg.targetLanguage.find(
+                (lang) => lang === t.to || lang.split("-")[0] === t.to || t.to === lang.split("-")[0]
+              );
+              const key = matchingLang || t.to;
+              console.log(`[Pipeline] Storing translation: key="${key}" (Azure returned to="${t.to}")`);
+              msg.translatedText[key] = t.text;
             });
             msg.translationLatency = Math.round(performance.now() - startTime);
             msg.status = "Completed";
@@ -155,20 +167,24 @@ export class TranslationPipeline {
             this.totalTranslationTime += msg.translationLatency;
             this.processedCount++;
 
-            // Notify UI of translated text BEFORE triggering TTS,
-            // so SynthesisQueue's onMessageUpdate can match msg.text against transcripts
+            console.log(`[Pipeline] Translation completed for msg ${msg.id}:`, {
+              translatedKeys: Object.keys(msg.translatedText),
+              latency: msg.translationLatency,
+              status: msg.status,
+            });
+
             this.safeNotifyMessageUpdate(msg);
             
-            // Invoke completed hook if registered
             if (this.onCompleteCallback) {
               try {
+                console.log(`[Pipeline] Firing onCompleteCallback for msg ${msg.id}`);
                 this.onCompleteCallback(msg);
               } catch (err) {
-                console.warn("TranslationPipeline: onCompleteCallback error:", err);
+                console.error("[Pipeline] onCompleteCallback error:", err);
               }
             }
           } else if (result.success && (!result.translations || result.translations.length === 0)) {
-            console.warn(`Translation returned empty results for msg ${msg.id}, using empty fallback`);
+            console.warn(`Translation returned empty results for msg ${msg.id}, using original text as fallback`);
             msg.targetLanguage.forEach((lang) => {
               msg.translatedText[lang] = msg.originalText;
             });
@@ -178,19 +194,18 @@ export class TranslationPipeline {
             this.totalTranslationTime += msg.translationLatency;
             this.processedCount++;
 
-            // Notify UI of translated text BEFORE triggering TTS
             this.safeNotifyMessageUpdate(msg);
 
             if (this.onCompleteCallback) {
               try {
                 this.onCompleteCallback(msg);
               } catch (err) {
-                console.warn("TranslationPipeline: onCompleteCallback error:", err);
+                console.error("[Pipeline] onCompleteCallback error:", err);
               }
             }
           }
         } catch (err) {
-          console.warn(`Translation attempt ${attempts} failed for msg ${msg.id}:`, err);
+          console.error(`[Pipeline] Translation attempt ${attempts} failed for msg ${msg.id}:`, err);
         }
       }
 

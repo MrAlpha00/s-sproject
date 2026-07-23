@@ -66,6 +66,7 @@ export class SynthesisQueue {
       timestamp: new Date().toISOString(),
     };
 
+    console.log(`[SynthesisQueue] Enqueue: id=${id} lang=${lang} voice=${voice} text="${text.substring(0, 60)}" queueSize=${this.queue.length}`);
     this.queue.push(message);
     this.notifyQueueChange();
     this.notifyMessageUpdate(message);
@@ -115,7 +116,10 @@ export class SynthesisQueue {
   }
 
   private async processQueue() {
-    if (this.isPlaying) return;
+    if (this.isPlaying) {
+      console.log("[SynthesisQueue] processQueue: already playing, deferring");
+      return;
+    }
     this.isPlaying = true;
 
     while (this.queue.some((m) => m.status === "Pending")) {
@@ -125,6 +129,8 @@ export class SynthesisQueue {
       this.currentMessage = msg;
       msg.status = "Synthesizing";
       this.safeNotifyMessageUpdate(msg);
+
+      console.log(`[SynthesisQueue] Processing: id=${msg.id} text="${msg.text.substring(0, 40)}" lang=${msg.language} voice=${msg.voice}`);
 
       try {
         const result = await this.service.speak(
@@ -137,8 +143,6 @@ export class SynthesisQueue {
             this.safeNotifyMessageUpdate(msg);
           },
           () => {
-            // Player finished — do NOT set Completed here, audioData may not be set yet.
-            // Final status is set after the speak() promise resolves.
             this.safeNotifyMessageUpdate(msg);
           }
         );
@@ -151,11 +155,13 @@ export class SynthesisQueue {
         this.totalLatency += result.latency;
         this.spokenCount++;
 
+        console.log(`[SynthesisQueue] Completed: id=${msg.id} latency=${result.latency}ms duration=${result.duration}ms audioBytes=${result.audioData?.length || 0}`);
+
         if (result.audioData) {
           this.safeNotifyAudioComplete(msg);
         }
       } catch (err) {
-        console.error("Speech Synthesis failed for item:", msg.id, err);
+        console.error("[SynthesisQueue] Synthesis failed for item:", msg.id, err);
         msg.status = "Failed";
       }
 

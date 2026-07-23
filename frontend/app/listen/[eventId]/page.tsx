@@ -347,26 +347,35 @@ export default function ListenPortal({ params }: { params: any }) {
         eventId,
         joinLanguage,
         (msg: BroadcastMessage) => {
-          // Late-join filter: ignore historical messages
           const msgTime = new Date(msg.timestamp).getTime();
-          if (msgTime < joinTimeRef.current) return;
+          if (msgTime < joinTimeRef.current) {
+            console.log(`[Listener] Ignoring old translation message (before join)`);
+            return;
+          }
 
+          console.log(`[Listener] Received translation: id=${msg.id} original="${msg.originalText?.substring(0, 40)}" translatedKeys=${Object.keys(msg.translatedText || {})} voice=${msg.voice}`);
           setMessages((prev) => {
             if (prev.some((m) => m.id === msg.id)) return prev;
             return [...prev, msg].slice(-8);
           });
         },
         async (audio: AudioPacketMetadata) => {
-          // Late-join filter: ignore older audio chunks
           const audioTime = new Date(audio.timestamp).getTime();
-          if (audioTime < joinTimeRef.current) return;
+          if (audioTime < joinTimeRef.current) {
+            console.log(`[Listener] Ignoring old audio packet (before join)`);
+            return;
+          }
+
+          console.log(`[Listener] Received audio: msgId=${audio.messageId} lang=${audio.language} voice=${audio.voice} audioBytes=${audio.audioData?.length || 0} seq=${audio.sequenceNumber}`);
 
           if (audio.language === joinLanguage && audio.audioData) {
             setActiveMessageId(audio.messageId);
 
-            if (!autoPlayRef.current) return;
+            if (!autoPlayRef.current) {
+              console.log(`[Listener] Auto-play disabled, skipping audio playback`);
+              return;
+            }
 
-            // Sequence tracking & duplicate filtering
             const orderedPackets = syncManager.processIncomingPacket({
               sessionId: audio.sessionId,
               eventId: audio.eventId,
@@ -379,13 +388,17 @@ export default function ListenPortal({ params }: { params: any }) {
               timestamp: audio.timestamp,
             });
 
-            // Enqueue ordered packet stream sequentially into player
+            console.log(`[Listener] SyncManager returned ${orderedPackets.length} ordered packets for playback`);
             for (const packet of orderedPackets) {
               await streamManager.enqueue(packet);
             }
 
             setCurrentVoice(audio.voice);
             setEstimatedNetworkLatency(syncManager.getLastNetworkLatency());
+          } else if (audio.language !== joinLanguage) {
+            console.log(`[Listener] Audio language mismatch: got=${audio.language} expected=${joinLanguage}`);
+          } else if (!audio.audioData) {
+            console.warn(`[Listener] Audio packet has no audioData`);
           }
         },
         () => {
