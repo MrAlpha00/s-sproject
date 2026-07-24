@@ -23,7 +23,7 @@ export class AudioSyncManager {
 
     // 1. Duplicate filtering
     if (this.processedSeqNums.has(seq)) {
-      console.warn(`AudioSyncManager: Duplicate packet detected for sequence ${seq}. Dropping.`);
+      console.warn(`[AudioSync] Duplicate packet for seq=${seq}. Dropping.`);
       return [];
     }
 
@@ -40,6 +40,7 @@ export class AudioSyncManager {
     // 3. Initialize expected sequence number
     if (this.expectedSeqNum === -1) {
       this.expectedSeqNum = seq;
+      console.log(`[AudioSync] Initialized expected sequence: ${seq}`);
     }
 
     // 4. In-order packet processing
@@ -64,16 +65,18 @@ export class AudioSyncManager {
         if (first !== undefined) this.processedSeqNums.delete(first);
       }
 
+      console.log(`[AudioSync] In-order packet seq=${seq} → returning ${packetsToReturn.length} packet(s), networkLatency=${networkLatency}ms`);
       return packetsToReturn;
     }
 
     // 5. Out-of-order packet buffering
     if (seq > this.expectedSeqNum) {
       this.outOfOrderPackets.set(seq, packet);
+      console.log(`[AudioSync] Out-of-order packet seq=${seq} (expected=${this.expectedSeqNum}), buffered. Buffer size=${this.outOfOrderPackets.size}`);
 
       // If buffer is too large, force return of oldest packets and advance expected sequence number
       if (this.outOfOrderPackets.size > this.maxOutOfOrderBuffer) {
-        console.warn(`AudioSyncManager: Out-of-order buffer size exceeded limit. Advancing expected sequence.`);
+        console.warn(`[AudioSync] Out-of-order buffer exceeded limit. Advancing expected sequence.`);
         
         const sortedSeqs = Array.from(this.outOfOrderPackets.keys()).sort((a, b) => a - b);
         const nextAvailableSeq = sortedSeqs[0];
@@ -95,7 +98,7 @@ export class AudioSyncManager {
     }
 
     // 6. Late/Stale packet drop
-    console.warn(`AudioSyncManager: Late packet received for sequence ${seq}. Expected ${this.expectedSeqNum}. Dropping.`);
+    console.warn(`[AudioSync] Late packet seq=${seq} (expected=${this.expectedSeqNum}). Dropping.`);
     return [];
   }
 

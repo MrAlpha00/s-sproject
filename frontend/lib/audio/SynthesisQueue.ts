@@ -18,11 +18,9 @@ export class SynthesisQueue {
   private currentMessage: SpeechMessage | null = null;
   private deviceId: string | null = null;
 
-  // Metrics
   private totalLatency = 0;
   private spokenCount = 0;
 
-  // Callbacks
   private onMessageUpdate: MessageUpdateCallback = () => {};
   private onQueueChange: QueueChangeCallback = () => {};
   private onMetricsUpdate: MetricsCallback = () => {};
@@ -30,11 +28,12 @@ export class SynthesisQueue {
 
   constructor(service: SpeechSynthesisService) {
     this.service = service;
-    console.log("[Playback] SynthesisQueue constructed");
+    console.log("[SynthesisQueue] Constructed");
   }
 
   setDeviceId(id: string | null) {
     this.deviceId = id;
+    console.log(`[SynthesisQueue] Device set: ${id || "default"}`);
   }
 
   registerCallbacks(callbacks: {
@@ -118,17 +117,18 @@ export class SynthesisQueue {
 
   private async processQueue() {
     if (this.isPlaying) {
-      console.log("[Playback] processQueue: already playing, deferring");
+      console.log("[SynthesisQueue] processQueue: already playing, deferring");
       return;
     }
 
     if (!this.service) {
-      console.error("[Playback] processQueue: service is null, aborting");
+      console.error("[SynthesisQueue] processQueue: service is null, aborting");
       return;
     }
 
     this.isPlaying = true;
-    console.log(`[Playback] processQueue started: pendingItems=${this.queue.filter((m) => m.status === "Pending").length}`);
+    const pendingCount = this.queue.filter((m) => m.status === "Pending").length;
+    console.log(`[SynthesisQueue] processQueue started: pendingItems=${pendingCount}`);
 
     while (this.queue.some((m) => m.status === "Pending")) {
       const msg = this.queue.find((m) => m.status === "Pending");
@@ -138,7 +138,7 @@ export class SynthesisQueue {
       msg.status = "Synthesizing";
       this.safeNotifyMessageUpdate(msg);
 
-      console.log(`[Playback] Processing: id=${msg.id} text="${msg.text.substring(0, 40)}" lang=${msg.language} voice=${msg.voice}`);
+      console.log(`[SynthesisQueue] Processing: id=${msg.id} text="${msg.text.substring(0, 40)}" lang=${msg.language} voice=${msg.voice}`);
 
       try {
         const result = await this.service.speak(
@@ -148,9 +148,11 @@ export class SynthesisQueue {
           this.deviceId,
           () => {
             msg.status = "Playing";
+            console.log(`[SynthesisQueue] onStart fired: id=${msg.id} → status=Playing`);
             this.safeNotifyMessageUpdate(msg);
           },
           () => {
+            console.log(`[SynthesisQueue] onEnd fired: id=${msg.id}`);
             this.safeNotifyMessageUpdate(msg);
           }
         );
@@ -163,13 +165,15 @@ export class SynthesisQueue {
         this.totalLatency += result.latency;
         this.spokenCount++;
 
-        console.log(`[Playback] Completed: id=${msg.id} latency=${result.latency}ms duration=${result.duration}ms audioBytes=${result.audioData?.length || 0}`);
+        console.log(`[SynthesisQueue] Completed: id=${msg.id} latency=${result.latency}ms duration=${result.duration}ms hasAudioData=${!!result.audioData} audioBytes=${result.audioData?.length || 0}`);
 
         if (result.audioData) {
           this.safeNotifyAudioComplete(msg);
+        } else {
+          console.warn(`[SynthesisQueue] No audioData for msg ${msg.id} — broadcast will be skipped (likely Web Speech fallback)`);
         }
       } catch (err) {
-        console.error(`[Playback] Synthesis failed for item ${msg.id}:`, err);
+        console.error(`[SynthesisQueue] Synthesis FAILED for item ${msg.id}:`, err);
         msg.status = "Failed";
       }
 
@@ -181,7 +185,7 @@ export class SynthesisQueue {
 
     this.isPlaying = false;
     this.currentMessage = null;
-    console.log("[Playback] processQueue finished");
+    console.log("[SynthesisQueue] processQueue finished");
     this.safeNotifyMetrics();
   }
 

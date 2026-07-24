@@ -141,16 +141,21 @@ export class SupabaseStreamingProvider implements StreamingService {
     };
 
     console.log(`[Streaming] Broadcasting translation: id=${msg.id} eventId=${msg.eventId} translatedKeys=${Object.keys(msg.translatedText)}`);
-    await this.channel.send({
-      type: "broadcast",
-      event: "translation",
-      payload,
-    });
+    try {
+      await this.channel.send({
+        type: "broadcast",
+        event: "translation",
+        payload,
+      });
+    } catch (err) {
+      console.error(`[Streaming] Translation broadcast FAILED: id=${msg.id}`, err);
+      throw err;
+    }
   }
 
   async broadcastAudio(audio: Omit<AudioPacketMetadata, "timestamp">): Promise<void> {
     if (!this.channel || this.status !== "connected") {
-      console.warn("[Streaming] Cannot broadcast audio data: stream disconnected.");
+      console.warn("[Streaming-STAGE-BROADCAST] Cannot broadcast audio: stream disconnected or channel null.");
       return;
     }
 
@@ -159,12 +164,18 @@ export class SupabaseStreamingProvider implements StreamingService {
       timestamp: new Date().toISOString(),
     };
 
-    console.log(`[Streaming] Broadcasting audio: msgId=${audio.messageId} lang=${audio.language} voice=${audio.voice} audioBytes=${audio.audioData?.length || 0} seq=${audio.sequenceNumber}`);
-    await this.channel.send({
-      type: "broadcast",
-      event: "audio",
-      payload,
-    });
+    console.log(`[Streaming-STAGE-BROADCAST] Sending audio broadcast: msgId=${audio.messageId} lang=${audio.language} audioBytes=${audio.audioData?.length || 0} seq=${audio.sequenceNumber} channelStatus=${this.status}`);
+    try {
+      await this.channel.send({
+        type: "broadcast",
+        event: "audio",
+        payload,
+      });
+      console.log(`[Streaming-STAGE-BROADCAST] Audio broadcast sent successfully: msgId=${audio.messageId}`);
+    } catch (err) {
+      console.error(`[Streaming-STAGE-BROADCAST] Audio broadcast SEND FAILED: msgId=${audio.messageId}`, err);
+      throw err;
+    }
   }
 
   async updateSessionState(state: SessionState): Promise<void> {

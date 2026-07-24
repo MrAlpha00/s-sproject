@@ -221,6 +221,17 @@ export default function LiveOperatorStudioPage() {
       setAzureRegion(region);
 
       const synthService = new SpeechSynthesisService(token, region);
+      synthService.setTokenFetcher(async () => {
+        try {
+          const refreshed = await getSpeechToken();
+          if (refreshed.success && refreshed.token && refreshed.region) {
+            return { token: refreshed.token, region: refreshed.region };
+          }
+        } catch (err) {
+          console.warn("[Studio] Token refresh failed:", err);
+        }
+        return null;
+      });
       speechSynthServiceRef.current = synthService;
 
       const synthesisQueue = new SynthesisQueue(synthService);
@@ -232,7 +243,7 @@ export default function LiveOperatorStudioPage() {
       }
 
       synthesisQueue.registerCallbacks({
-        onMessageUpdate: (msg) => {
+        onMessageUpdate: async (msg) => {
           console.log(`[Audio] SynthesisQueue onMessageUpdate: msg=${msg.id} status=${msg.status} voice=${msg.voice} latency=${msg.latency} hasAudio=${!!msg.audioData}`);
           setTranscripts((prev) => {
             const matched = prev.find((t) =>
@@ -259,19 +270,24 @@ export default function LiveOperatorStudioPage() {
           });
 
           if (msg.status === "Completed" && msg.audioData && activeSessionRef.current && streamingServiceRef.current) {
-            console.log(`[Audio] Broadcasting audio for msg ${msg.id}: bytes=${msg.audioData.length} lang=${msg.language}`);
-            streamingServiceRef.current.broadcastAudio({
-              sessionId: activeSessionRef.current.id,
-              eventId: selectedEventIdRef.current,
-              messageId: msg.id,
-              audioData: msg.audioData,
-              language: msg.language,
-              voice: msg.voice,
-              duration: msg.duration,
-              sequenceNumber: ++sequenceNumberRef.current,
-            });
+            console.log(`[Audio-STAGE-BROADCAST] Broadcasting audio for msg ${msg.id}: bytes=${msg.audioData.length} lang=${msg.language} seq=${sequenceNumberRef.current + 1}`);
+            try {
+              await streamingServiceRef.current.broadcastAudio({
+                sessionId: activeSessionRef.current.id,
+                eventId: selectedEventIdRef.current,
+                messageId: msg.id,
+                audioData: msg.audioData,
+                language: msg.language,
+                voice: msg.voice,
+                duration: msg.duration,
+                sequenceNumber: ++sequenceNumberRef.current,
+              });
+              console.log(`[Audio-STAGE-BROADCAST] Broadcast sent OK for msg ${msg.id}`);
+            } catch (broadcastErr) {
+              console.error(`[Audio-STAGE-BROADCAST] Broadcast FAILED for msg ${msg.id}:`, broadcastErr);
+            }
           } else if (msg.status === "Completed" && !msg.audioData) {
-            console.warn(`[Audio] Synthesis completed but no audioData for msg ${msg.id}`);
+            console.warn(`[Audio-STAGE-BROADCAST] Synthesis completed but NO audioData for msg ${msg.id} — broadcast skipped (likely Web Speech fallback, no raw audio available)`);
           }
         },
         onMetricsUpdate: (metrics) => {

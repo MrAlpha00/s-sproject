@@ -20,6 +20,7 @@ export class AudioStreamManager {
     this.gainNode = this.audioContext.createGain();
     this.gainNode.gain.value = this.volume / 100;
     this.gainNode.connect(this.audioContext.destination);
+    console.log(`[AudioStream] Created: contextState=${audioContext.state} sampleRate=${audioContext.sampleRate}`);
   }
 
   registerStateCallback(callback: () => void) {
@@ -45,8 +46,31 @@ export class AudioStreamManager {
     this.onStateChange();
   }
 
+  private async ensureContextRunning(): Promise<boolean> {
+    if (this.audioContext.state !== "suspended") return true;
+    console.log(`[AudioStream] AudioContext state=${this.audioContext.state}, attempting resume...`);
+    try {
+      await this.audioContext.resume();
+      console.log(`[AudioStream] AudioContext resumed: state=${this.audioContext.state}`);
+      return this.audioContext.state !== "suspended";
+    } catch (err) {
+      console.error("[AudioStream] Failed to resume AudioContext:", err);
+      return false;
+    }
+  }
+
   async enqueue(packet: AudioPacket) {
-    if (this.isStopped) return;
+    if (this.isStopped) {
+      console.warn("[AudioStream] enqueue called on stopped manager — rejecting packet");
+      return;
+    }
+
+    const ctxRunning = await this.ensureContextRunning();
+    if (!ctxRunning) {
+      console.error("[AudioStream] Cannot enqueue: AudioContext not running");
+      this.droppedCount++;
+      return;
+    }
 
     const item: QueueItem = {
       packet,
@@ -62,6 +86,7 @@ export class AudioStreamManager {
         throw new Error("Empty audio packet data");
       }
 
+      console.log(`[AudioStream-STAGE-1] Decoding audio: seq=${packet.sequenceNumber} base64Len=${packet.audioData.length}`);
       const binaryString = atob(packet.audioData);
       const len = binaryString.length;
       const bytes = new Uint8Array(len);
@@ -72,9 +97,10 @@ export class AudioStreamManager {
       const buffer = await this.audioContext.decodeAudioData(bytes.buffer);
       item.audioBuffer = buffer;
       
+      console.log(`[AudioStream-STAGE-2] Decoded OK: seq=${packet.sequenceNumber} duration=${buffer.duration.toFixed(2)}s sampleRate=${buffer.sampleRate} channels=${buffer.numberOfChannels}`);
       this.processQueue();
     } catch (err) {
-      console.error("AudioStreamManager: Audio packet decoding failed:", err);
+      console.error(`[AudioStream-STAGE-1] Decode FAILED for seq=${packet.sequenceNumber}:`, err);
       this.droppedCount++;
       this.queue = this.queue.filter(q => q.packet.sequenceNumber !== packet.sequenceNumber);
       this.onStateChange();
@@ -82,7 +108,18 @@ export class AudioStreamManager {
   }
 
   private processQueue() {
-    if (this.isPaused || this.isStopped) return;
+    if (this.isPaused || this.isStopped) {
+      console.log(`[AudioStream] processQueue skipped: paused=${this.isPaused} stopped=${this.isStopped}`);
+      return;
+    }
+
+    if (this.audioContext.state === "suspended") {
+      console.warn(`[AudioStream] processQueue skipped: AudioContext state=${this.audioContext.state}`);
+      this.ensureContextRunning().then(ok => {
+        if (ok) this.processQueue();
+      });
+      return;
+    }
 
     if (this.nextPlayTime < this.audioContext.currentTime) {
       this.nextPlayTime = this.audioContext.currentTime;
@@ -105,15 +142,19 @@ export class AudioStreamManager {
 
         this.queue.shift();
         
+        console.log(`[AudioStream-STAGE-3] Scheduled playback: seq=${item.packet.sequenceNumber} at=${playTime.toFixed(3)}s duration=${item.audioBuffer.duration.toFixed(2)}s`);
+
         source.onended = () => {
           this.activeSources.delete(source);
           this.completedCount++;
+          console.log(`[AudioStream-STAGE-4] Playback ended: seq=${item.packet.sequenceNumber} completed=${this.completedCount}`);
           this.onStateChange();
           this.processQueue();
         };
 
         this.onStateChange();
       } else {
+        console.warn(`[AudioStream] processQueue: first item has null buffer (seq=${item.packet.sequenceNumber}), waiting for decode`);
         break;
       }
     }
@@ -128,6 +169,7 @@ export class AudioStreamManager {
     });
     this.activeSources.clear();
     this.nextPlayTime = 0;
+    console.log("[AudioStream] Paused");
     this.onStateChange();
   }
 
@@ -135,6 +177,7 @@ export class AudioStreamManager {
     if (!this.isPaused) return;
     this.isPaused = false;
     this.nextPlayTime = this.audioContext.currentTime;
+    console.log("[AudioStream] Resumed");
     this.processQueue();
     this.onStateChange();
   }
@@ -157,6 +200,18 @@ export class AudioStreamManager {
     try {
       this.gainNode.disconnect();
     } catch (e) {}
+    console.log("[AudioStream] Stopped");
+  }
+
+  restart() {
+    this.isStopped = false;
+    this.isPaused = false;
+    this.gainNode = this.audioContext.createGain();
+    this.gainNode.gain.value = this.mute ? 0 : this.volume / 100;
+    this.gainNode.connect(this.audioContext.destination);
+    this.nextPlayTime = 0;
+    console.log("[AudioStream] Restarted");
+    this.onStateChange();
   }
 
   getPlaybackState(): PlaybackState {

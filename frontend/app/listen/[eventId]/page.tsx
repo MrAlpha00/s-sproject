@@ -268,6 +268,22 @@ export default function ListenPortal({ params }: { params: any }) {
     }
   }, [messages, STORAGE_KEY, STORAGE_EXPIRY_KEY]);
 
+  // Periodic AudioContext health check — auto-resume if suspended
+  useEffect(() => {
+    if (!joined || !audioContext) return;
+    const interval = setInterval(() => {
+      if (audioContext.state === "suspended") {
+        console.warn("[Listener] AudioContext health check: state=suspended — attempting resume");
+        audioContext.resume().then(() => {
+          console.log(`[Listener] AudioContext health check: resumed → state=${audioContext.state}`);
+        }).catch((err) => {
+          console.error("[Listener] AudioContext health check: resume FAILED:", err);
+        });
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [joined, audioContext]);
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
@@ -285,11 +301,24 @@ export default function ListenPortal({ params }: { params: any }) {
 
     // Ensure a valid language is selected before joining
     const joinLanguage = selectedLanguage || eventDetails?.targetLanguages?.[0] || "";
+    console.log(`[Listener] handleJoin: eventId=${eventId} joinLanguage="${joinLanguage}" selectedLanguage="${selectedLanguage}" targetLanguages=${JSON.stringify(eventDetails?.targetLanguages || [])}`);
 
     try {
       // 1. Initialize browser Web Audio Context
       const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioCtxClass();
+      console.log(`[Listener-STAGE-1] AudioContext created: state=${ctx.state} sampleRate=${ctx.sampleRate}`);
+
+      if (ctx.state === "suspended") {
+        console.log("[Listener-STAGE-1] AudioContext suspended — resuming via user gesture");
+        try {
+          await ctx.resume();
+          console.log(`[Listener-STAGE-1] AudioContext resumed: state=${ctx.state}`);
+        } catch (resumeErr) {
+          console.error("[Listener-STAGE-1] AudioContext resume FAILED:", resumeErr);
+        }
+      }
+
       setAudioContext(ctx);
 
       // Record join time to reject older historical packets
@@ -366,40 +395,45 @@ export default function ListenPortal({ params }: { params: any }) {
             return;
           }
 
-          console.log(`[Listener] Received audio: msgId=${audio.messageId} lang=${audio.language} voice=${audio.voice} audioBytes=${audio.audioData?.length || 0} seq=${audio.sequenceNumber}`);
+          console.log(`[Listener-STAGE-2] Received audio broadcast: msgId=${audio.messageId} lang=${audio.language} voice=${audio.voice} audioBytes=${audio.audioData?.length || 0} seq=${audio.sequenceNumber}`);
 
-          if (audio.language === joinLanguage && audio.audioData) {
-            setActiveMessageId(audio.messageId);
-
-            if (!autoPlayRef.current) {
-              console.log(`[Listener] Auto-play disabled, skipping audio playback`);
-              return;
-            }
-
-            const orderedPackets = syncManager.processIncomingPacket({
-              sessionId: audio.sessionId,
-              eventId: audio.eventId,
-              messageId: audio.messageId,
-              audioData: audio.audioData,
-              language: audio.language,
-              voice: audio.voice,
-              duration: audio.duration,
-              sequenceNumber: audio.sequenceNumber,
-              timestamp: audio.timestamp,
-            });
-
-            console.log(`[Listener] SyncManager returned ${orderedPackets.length} ordered packets for playback`);
-            for (const packet of orderedPackets) {
-              await streamManager.enqueue(packet);
-            }
-
-            setCurrentVoice(audio.voice);
-            setEstimatedNetworkLatency(syncManager.getLastNetworkLatency());
-          } else if (audio.language !== joinLanguage) {
-            console.log(`[Listener] Audio language mismatch: got=${audio.language} expected=${joinLanguage}`);
-          } else if (!audio.audioData) {
-            console.warn(`[Listener] Audio packet has no audioData`);
+          if (!audio.audioData) {
+            console.warn(`[Listener-STAGE-2] Audio packet has no audioData — cannot play`);
+            return;
           }
+
+          if (audio.language !== joinLanguage) {
+            console.log(`[Listener-STAGE-2] Audio language mismatch: got=${audio.language} expected=${joinLanguage} — skipping`);
+            return;
+          }
+
+          if (!autoPlayRef.current) {
+            console.log(`[Listener] Auto-play disabled, skipping audio playback`);
+            return;
+          }
+
+          setActiveMessageId(audio.messageId);
+
+          const orderedPackets = syncManager.processIncomingPacket({
+            sessionId: audio.sessionId,
+            eventId: audio.eventId,
+            messageId: audio.messageId,
+            audioData: audio.audioData,
+            language: audio.language,
+            voice: audio.voice,
+            duration: audio.duration,
+            sequenceNumber: audio.sequenceNumber,
+            timestamp: audio.timestamp,
+          });
+
+          console.log(`[Listener-STAGE-3] SyncManager returned ${orderedPackets.length} ordered packets for playback`);
+          for (const packet of orderedPackets) {
+            console.log(`[Listener-STAGE-4] Enqueuing to AudioStreamManager: seq=${packet.sequenceNumber}`);
+            await streamManager.enqueue(packet);
+          }
+
+          setCurrentVoice(audio.voice);
+          setEstimatedNetworkLatency(syncManager.getLastNetworkLatency());
         },
         () => {
           // Operator stopped broadcast — mark ended but don't call handleLeave immediately
